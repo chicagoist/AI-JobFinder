@@ -1,0 +1,51 @@
+cover_letter:
+  career_start_year: 2010
+  mandatory_skills:
+  - Java
+  - Perl
+  - Kommandozeile (Console)
+  - Künstliche Intelligenz (AI / LLM)
+  - Linux
+ko_filters:
+  certifications:
+    mandatory_if_specified:
+    - RHCSA
+    - RHCE
+  clearances:
+    forbidden_keywords:
+    - U.S. citizenship
+    - security clearance
+    - TESA status
+    - Secret clearance
+    - Top Secret clearance
+  companies_blacklist:
+  - Zukunftsmotor
+  - Zukunftsmotor GmbH
+  datacenter_physical_work:
+    forbidden: true
+    keywords: []
+  education:
+    block_degree_only_roles: true
+    require_it_degree_strictly: true
+  forbidden_titles:
+  - Full Stack Developer
+  - Fullstack Developer
+  - Senior
+  - Middle
+  - Consultant
+  - Support
+  languages:
+    min_required_english: A2
+    min_required_german: B1
+  salary:
+    min_annual_eur: 36000
+  spam_providers:
+    allow_internship: true
+    blocked_keywords:
+    - GFN
+    - WBS
+    - DAA
+    - IU
+  user_rejected_reasons: []
+scoring:
+  min_score_to_apply: 5.0

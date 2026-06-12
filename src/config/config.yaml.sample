@@ -1,0 +1,43 @@
+user_profile:
+  # Путь к вашей папке данных Chrome на Windows
+  chrome_data_dir: "C:\\Users\\<Username>\\AppData\\Local\\Google\\Chrome\\User Data"
+  # Профиль Chrome (например, Default или Profile 1)
+  chrome_profile: "Default"
+  # Путь к вашему файлу Lebenslauf (относительно src/ или абсолютный)
+  # Примеры: "../documents/Lebenslauf_Ivan_Ivanov.pdf"
+  cv_path: "../documents/Lebenslauf_UserName.pdf"
+  # Папка для дополнительных сертификатов и дипломов (относительно src/ или абсолютный)
+  documents_dir: "../documents"
+
+defaults:
+  salary_expectation: "36.000 €"
+  availability: "zwei Monate nach Zusage"
+  work_permit: "Germany"
+  notice_period: "3 Monate zum Quartalsende"
+
+criteria:
+  min_score: 8.0
+  min_salary_eur: 36000
+  remote_allowed: true
+  german_level: "B1"
+  excluded_companies:
+    - "Example Company"
+
+gemini:
+  model: "gemini-2.5-flash"
+  api_keys:
+    - "<YOUR_GEMINI_API_KEY_1>"
+    - "<YOUR_GEMINI_API_KEY_2>"
+    - "<YOUR_GEMINI_API_KEY_3>"
+    - "<YOUR_GEMINI_API_KEY_4>"
+    - "<YOUR_GEMINI_API_KEY_5>"
+
+llm:
+  priority: "gemini"       # "gemini" or "openrouter" — primary LLM; falls back to other on failure
+
+smtp:
+  host: "smtp.gmail.com"
+  port: 587
+  username: "<YOUR_EMAIL>@gmail.com"
+  password: "<YOUR_SMTP_PASSWORD_OR_APP_PASSWORD>"
+

@@ -1,0 +1,202 @@
+﻿classification_prompt: 'Klassifiziere das folgende Dokument (die ersten 1000 Zeichen
+  Text) in eine der folgenden Kategorien:
+
+  - "Lebenslauf" (CV)
+
+  - "Anschreiben" (Cover Letter)
+
+  - "Zertifikat" (Certificate)
+
+  - "Diplom" (Diploma/Degree/Transcript/Zeugnis)
+
+  - "Sonstiges" (Other)
+
+
+  Text des Dokuments:
+
+  {doc_text}
+
+
+  Gib NUR den Kategorienamen zurück (z.B. "Lebenslauf").'
+cover_letter_prompt: "Du bist ein Experte für Karriere und Bewerbungen in Deutschland.\
+  \ Erstelle ein modernes, überzeugendes Anschreiben (Cover Letter) auf Deutsch für\
+  \ folgende Rolle.\n\nKandidatenprofil (JSON):\n{candidate_profile}\n\nStellenbeschreibung\
+  \ (Job Description):\n{job_description}\n\nBewerbungs-Einstellungen:\n- Gehaltsvorstellung:\
+  \ {salary_exp}\n- Verfügbarkeit / Kündigungsfrist: {availability}\n- IT-Erfahrung:\
+  \ Relevanter IT-Werdegang begann im Jahr {career_start_year}. Formuliere seine Erfahrung\
+  \ präzise und übertreibe nicht (nicht \"30 Jahre IT-Erfahrung\" schreiben, da dies\
+  \ irreführend ist; er war zuvor Industriemechaniker).\n\nRichtlinien für den Text:\n\
+  1. **Wahrheitspflicht (Strict Truthfulness - CRITICAL)**:\n   - Erfinde KEINE Fähigkeiten,\
+  \ Technologien oder Erfahrungen, die nicht im Kandidatenprofil aufgeführt sind.\
+  \ \n   - Wenn die Stellenbeschreibung Technologien fordert, die der Kandidat nicht\
+  \ beherrscht (z.B. Puppet, Ansible, Checkmk, E-Akte-Lösungen), behaupte NICHT, dass\
+  \ er diese beherrscht. Konzentriere dich stattdessen auf seine tatsächlichen Stärken\
+  \ aus dem Profil wie Linux/Windows-Serveradministration, Skripting (Bash, PowerShell,\
+  \ Python) und Cloud-Grundlagen (Azure).\n   - Der Wert \"experience_years\" (ca.\
+  \ 30 Jahre) bezieht sich auf die gesamte berufliche Laufbahn (inkl. früherer technischer\
+  \ Berufe wie Industriemechaniker). Seine IT-Erfahrung (Netzwerke, Linux-Administration)\
+  \ begann als Freelancer ab {career_start_year} (bzw. intensiviert durch aktuelle\
+  \ Weiterbildungen ab 2025). Stelle seine IT-Erfahrung wahrheitsgemäß dar (z.B. \"\
+  mit meiner langjährigen Erfahrung in der Web-Systemadministration seit {career_start_year}...\"\
+  \ oder \"als angehender IT-Administrator...\"). Behaupte auf keinen Fall, dass er\
+  \ 30 Jahre IT-Erfahrung hat!\n2. **Stil und Aufbau (German Business Style)**:\n\
+  \   - Nutze professionelle deutsche Bewerbungsformulierungen (z.B. \"mit großem\
+  \ Interesse habe ich Ihre Stellenausschreibung für einen [Position] auf [Quelle]\
+  \ gelesen.\").\n   - Gliedere das Anschreiben klar in:\n     - Einleitung (Bezug\
+  \ zur Stelle, Quelle, kurze Motivation)\n     - Hauptteil 1 (Aktuelle Weiterbildung,\
+  \ Windows/Linux-Administration, Active Directory, DNS, DHCP, langjährige Web-Systemadministration\
+  \ seit {career_start_year}, Cloud-Management, Virtualisierung)\n     - Hauptteil\
+  \ 2 (Steuerung und Automatisierung über die Kommandozeile, sowie die folgenden zwingenden\
+  \ Fähigkeiten des Kandidaten: {mandatory_skills}. Webe diese Fähigkeiten organisch\
+  \ und flüssig in den Text ein.)\n     - Schluss (Begeisterung, Verfügbarkeit: {availability},\
+  \ ggf. Gehaltsvorstellung von {salary_exp}. Formuliere hierzu einen grammatikalisch\
+  \ korrekten, flüssigen Satz.)\n3. **Beispiel für den erwarteten Stil und Aufbau**:\n\
+  \   Verwende exakt diesen Tonfall und Struktur für die Formulierung:\n   \n   ---\
+  \ BEISPIEL ANSCHREIBEN ---\n   Sehr geehrte Damen und Herren,\n   \n   mit großem\
+  \ Interesse habe ich Ihre Stellenausschreibung für einen Anwendungsbetreuer Linux\
+  \ | Windows, Datenbanken, Monitoring auf Vesterling.com gelesen. Die Möglichkeit,\
+  \ an der Konzeption und Integration von E-Government-Lösungen mitzuwirken und Geschäftsprozesse\
+  \ durch IT-Systeme zu optimieren, spricht mich sehr an. Meine umfassende Erfahrung\
+  \ in der Systemadministration und meine aktuellen Weiterbildungen qualifizieren\
+  \ mich hervorragend für diese Position.\n   \n   Im Rahmen meiner aktuellen Weiterbildung\
+  \ zum IT-Administrator verwalte ich Windows Server (2019/2022) und Linux-Systeme\
+  \ (Debian/Ubuntu) und konfiguriere Netzwerkdienste wie DNS, DHCP und Active Directory.\
+  \ Diese praktischen Kenntnisse werden durch meine langjährige Tätigkeit als Web-Systemadministrator\
+  \ ergänzt, in der ich über elf Jahre hinweg LAMP-Stacks und Nginx-Umgebungen betreute\
+  \ und Systemadministration verantwortete. Meine Expertise erstreckt sich zudem auf\
+  \ das Cloud-Management mit Microsoft Azure und Virtualisierung mittels Hyper-V,\
+  \ was eine solide Grundlage für den Aufbau und die Konfiguration von On-Premise-\
+  \ und Cloud-nativen Lösungen bietet.\n   \n   Die Arbeit direkt über die Kommandozeile\
+  \ (Console) sowie die Automatisierung von Prozessen sind zentrale Schwerpunkte meiner\
+  \ täglichen Praxis. Hierfür nutze ich neben Bash, PowerShell und Python auch Skriptsprachen\
+  \ wie Perl. Im Entwicklungsbereich bringe ich fundierte Kenntnisse in Java (inkl.\
+  \ Spring Boot) mit. Zudem beschäftige ich mich intensiv mit dem Einsatz von Künstlicher\
+  \ Intelligenz und Large Language Models (AI / LLM) zur Optimierung administrativer\
+  \ Abläufe. Mein Profil wird durch Kenntnisse in PostgreSQL/MySQL, Docker und agile\
+  \ Methoden wie Scrum abgerundet.\n   \n   Ich bin davon überzeugt, dass meine technischen\
+  \ Fähigkeiten und meine lösungsorientierte Arbeitsweise eine wertvolle Bereicherung\
+  \ für Ihr Team darstellen. Die Möglichkeit, an innovativen E-Government-Lösungen\
+  \ mitzuwirken und die digitale Transformation mitzugestalten, motiviert mich besonders.\n\
+  \   \n   Ich stehe Ihnen ab dem 01. September 2026 zur Verfügung.\n   \n   Mit freundlichen\
+  \ Grüßen\n   <Vorname> <Nachname>\n   --- ENDE BEISPIEL ---\n   \n4. **Länge**:\
+  \ Maximal 250-300 Wörter.\n\nGib NUR den Fließtext des Anschreibens zurück, beginnend\
+  \ direkt mit der Betreffzeile (z.B. \"**Bewerbung als Anwendungsbetreuer Linux/Windows**\"\
+  ) und gefolgt von der Anrede und dem Inhalt. Verwende keine Absender- oder Empfänger-Header\
+  \ im Text, diese werden automatisch generiert."
+form_filler_prompt: 'Du bist ein KI-Assistent, der Webformulare ausfüllt. Dir liegen
+  die interaktiven Elemente der aktuellen Webseite sowie das Profil des Kandidaten
+  vor.
+
+
+  Kandidatenprofil (JSON):
+
+  {candidate_profile}
+
+
+  Bewerbungs-Einstellungen (defaults):
+
+  - Gehaltsvorstellung: {salary_expectation}
+
+  - Kündigungsfrist / Verfügbarkeit: {availability}
+
+  - Arbeitserlaubnis: {work_permit}
+
+
+  Interaktive Elemente auf der Seite (JSON):
+
+  {elements}
+
+
+  Entscheide für jedes relevante Element auf der Seite, welche Aktion ausgeführt werden
+  soll.
+
+  Mögliche Aktionen:
+
+  - {{"action": "fill", "ref_id": "...", "value": "..."}}: Für Textfelder (Vorname,
+  Nachname, Email, Telefon, Gehaltsvorstellung etc.)
+
+  - {{"action": "click", "ref_id": "..."}}: Zum Anklicken von Checkboxen (z.B. Datenschutz,
+  Bestätigungen). HINWEIS: Klicke NICHT auf Submit/Weiter-Buttons, da diese vom Hauptscript
+  gesteuert werden!
+
+  - {{"action": "upload_cv", "ref_id": "..."}}: Wenn ein Input-Feld (type=file) für
+  den Lebenslauf (CV/Resume) gedacht ist.
+
+  - {{"action": "upload_cover_letter", "ref_id": "..."}}: Wenn ein Input-Feld (type=file)
+  für das Anschreiben (Cover Letter) gedacht ist.
+
+
+  Gib NUR das reine JSON-Dokument zurück (eine Liste von Aktionen), ohne Erklärungen
+  oder Markdown-Tags.'
+scoring_prompt: "Du bist ein erfahrener IT-Recruiter in Deutschland. Vergleiche das\
+  \ Kandidatenprofil mit der Stellenbeschreibung (Job Description).\nBewerte das Match\
+  \ auf einer Skala von 0 bis 10.\n\nKandidatenprofil:\n{candidate_profile}\n\nStellenbeschreibung:\n\
+  {job_description}\n{rejections_str}\n\nBewerte nach folgenden Kriterien:\n1. **Hard\
+  \ Skills & Technologien** (max 4.0 Punkte): Vergleich der geforderten Technologien\
+  \ mit den Skills des Kandidaten.\n2. **Berufserfahrung / Seniorität** (max 3.0 Punkte): Passen die Jahre und die Art/Tiefe der Erfahrung zur Rolle?\n   ACHTUNG: Der Kandidat hat ein Junior-Niveau. Seine formelle IT-Berufserfahrung als Angestellter beträgt ca. 2 Jahre (Java/Perl Entwickler). Zuvor war er freiberuflich als Webmaster/Web-Administrator tätig. Er sucht Einstiegs-, Junior- oder Mid-Level-Stellen und ist für Junior-Stellen NICHT überqualifiziert. Nimm KEINE automatische Ablehnung wegen Überqualifizierung vor, wenn die Stelle Junior- oder Entry-Level ist! Wenn die Stelle jedoch mehrjährige Erfahrung in einem spezifischen Bereich fordert, den der Kandidat laut Profil nicht abdeckt, ziehe hier massiv Punkte ab.\n3. **Sprachanforderungen** (max 2.0 Punkte): Der\
+  \ Kandidat spricht Deutsch auf dem Niveau: {candidate_german}. Wenn die Stelle Deutsch\
+  \ C1 oder höher fordert, ziehe entsprechend Punkte ab.\n4. **Standort & Arbeitsform** (max\
+  \ 1.0 Punkte): Passt the Standort zur Wohnadresse des Kandidaten (Rodenbach, Deutschland)?\
+  \ Der Kandidat sucht eine Festanstellung (Vollzeit, unbefristet) und ist vollkommen\
+  \ flexibel bezüglich der Arbeitsform: Er kann vor Ort (On-site im Großraum Frankfurt\
+  \ am Main / Hanau / Hessen), hybrid oder zu 100% remote arbeiten. Vor-Ort-Arbeit\
+  \ im Raum Frankfurt/Hanau/Hessen (ca. 25-35 km um Rodenbach) ist ausdrücklich erwünscht\
+  \ und KEIN Grund für Punktabzüge oder K.O.\n\nZusatzprüfung (K.O.-Kriterien - WICHTIG):\n\
+  - Harte Ausschlusskriterien (Muss-Anforderungen): Wenn die Stellenbeschreibung angibt,\
+  \ dass bestimmte Erfahrungen, Fähigkeiten oder Bedingungen zwingend erforderlich\
+  \ sind (\"Muss\", \"erforderlich\", \"bewerben Sie sich nicht ohne\", \"Bewerbungen\
+  \ ohne XY werden nicht bearbeitet\") und der Kandidat diese nachweislich NICHT besitzt\
+  \ (z. B. C1-Deutsch falls explizit gefordert), setze den Gesamtscore auf 0 und setze\
+  \ ko_criterion_triggered auf true.\n- Akademischer Abschluss (Degree): Wenn die\
+  \ Stelle zwingend einen universitären/akademischen Abschluss (Degree, Bachelor,\
+  \ Master, PhD in Computer Science, Software Engineering oder Ähnliches) erfordert,\
+  \ und NICHT explizit eine gleichwertige Ausbildung/Berufserfahrung (\"or equivalent\
+  \ experience/training\") als Alternative zulässt, setze den Gesamtscore SOFORT auf\
+  \ 0 und ko_criterion_triggered auf true. (Hinweis: Der Kandidat hat kein IT-Studium,\
+  \ sondern eine Ausbildung als Industriemechaniker und ein Abitur als Sport- und\
+  \ Fitnesslehrer).\n- Englisch-Kenntnisse (English Language): Der Kandidat hat Englisch-Kenntnisse\
+  \ auf Niveau **{candidate_english}** (Grundkenntnisse). \
+  \ ACHTUNG — NUR diese Formulierungen lösen ein K.O. aus: \"verhandlungssicher\
+  \ Englisch\", \"fließend Englisch\", \"fluent English\", \"excellent English skills\",\
+  \ \"English C1\", \"business fluent\", \"very good English\" (sehr gut). \
+  \ \"Gute Englischkenntnisse\" / \"good English knowledge\" IST KEIN K.O. — das ist\
+  \ eine weiche Anforderung und wird nur in der Sprachenteilbewertung (max 2.0) berücksichtigt.\
+  \ Wenn die Stelle verhandlungssicheres, fließendes oder exzellentes Englisch voraussetzt\
+  \ (wie oben definiert), setze den Gesamtscore SOFORT auf 0 und ko_criterion_triggered\
+  \ auf true.\n- Sicherheitsfreigaben & Staatsbürgerschaft\
+  \ (Clearance & Citizenship): Wenn die Stelle eine Sicherheitsfreigabe (active Secret/Top\
+  \ Secret clearance, DoD-Freigabe) oder eine bestimmte Staatsbürgerschaft (z. B.\
+  \ U.S. citizenship required / US-Staatsbürgerschaft) oder spezielle Militär-Zulassungen\
+  \ (z. B. TESA-Qualifikation, DoD 8140) erfordert, die der Kandidat nicht hat (der\
+  \ Kandidat hat KEINE US-Staatsbürgerschaft, keine US-Militär-Sicherheitsfreigabe\
+  \ und kein TESA-Zertifikat), setze den Gesamtscore SOFORT auf 0 und ko_criterion_triggered\
+  \ auf true. Ausschluss-Schlüsselwörter: {clearance_keywords}.\n- Spezifische Zertifikate:\
+  \ Wenn bestimmte Zertifizierungen (z. B. {certifications}) zwingend als \"Required\"\
+  \ oder \"Must hold\" aufgeführt sind und der Kandidat diese nachweislich NICHT besitzt\
+  \ (der Kandidat besitzt nur Cisco CCST, Google Tech Support und AZ-900), setze den\
+  \ Gesamtscore SOFORT auf 0 und ko_criterion_triggered auf true.\n- Bisherige Ablehnungsgründe:\
+  \ Wenn die Stellenbeschreibung Kriterien/Anforderungen erfüllt, die der Kandidat\
+  \ zuvor explizit abgelehnt hat (siehe oben unter 'Bisherige Ablehnungsgründe des\
+  \ Kandidaten'), setze den Gesamtscore auf 0 und ko_criterion_triggered auf true.\n\
+  - Gehalt: Wenn in der Stellenausschreibung ein Gehalt angegeben ist, das unter {min_salary}\
+  \ € liegt, setze den Score auf 0 und ko_criterion_triggered auf true.\n- Bildungsanbieter\
+  \ / Weiterbildungsangebote: Wenn es sich bei dem Angebot um eine reine Umschulung,\
+  \ Ausbildung oder Weiterbildung von einem Bildungsanbieter (z.B. {spam_keywords})\
+  \ handelt, die eine Schulung/Werbung statt einer regulären Arbeitsstelle ist, setze\
+  \ den Score auf 0 und ko_criterion_triggered auf true.\n  AUSNAHME: Wenn es sich\
+  \ um ein konkretes Praktikum (Praxisphase/Praxis) bei/über einen solchen Anbieter\
+  \ handelt, das hervorragend zu den Hard Skills des Kandidaten passt (insb. Linux-Administration,\
+  \ Perl, Java, Python), darf der Score regulär berechnet werden.\n- Full Stack Developer:\
+  \ Wenn die Stelle oder der Titel für einen Full Stack Developer, Fullstack-Entwickler\
+  \ oder Ähnliches ausgeschrieben ist (der Kandidat sucht primär Systemadministration,\
+  \ Linux-Administration oder reine Backend-Rollen und schließt Full Stack aus), setze\
+  \ den Gesamtscore SOFORT auf 0 und ko_criterion_triggered auf true.\
+  \ - Deutsch-Sprachniveau (C1/C2 als K.O.): Wenn die Stelle Deutsch C1, C2 oder \"verhandlungssicher\" zwingend voraussetzt (auch bei \"erwünscht\" oder \"gewünscht\"), setze den Gesamtscore SOFORT auf 0 und ko_criterion_triggered auf true. Der Kandidat spricht Deutsch nur auf Niveau {candidate_german} und erfüllt damit keine über B2 hinausgehenden Anforderungen.\
+  \ - Consultant oder Support-Titel: Wenn die Position \"Consultant\" oder \"Support\" im Titel führt (z.B. IT Consultant, Support Engineer), setze den Gesamtscore SOFORT auf 0 und ko_criterion_triggered auf true.\n\nGib NUR das\
+  \ reine JSON-Dokument zurück, ohne zusätzliche Erklärung, Markdown-Tags (wie ```json)\
+  \ oder Formatierung.\n\nStruktur des erwarteten JSON:\n{{\n  \"scores\": {{\n  \
+  \  \"hard_skills\": 0.0,\n    \"experience\": 0.0,\n    \"languages\": 0.0,\n  \
+  \  \"location\": 0.0\n  }},\n  \"total_score\": 0.0,\n  \"reasoning\": \"Detaillierte\
+  \ Begründung auf Deutsch für jede Kategorie\",\n  \"ko_criterion_triggered\": false\n\
+  \  }}"
+extract_recruiter_prompt: "Extrahiere den vollständigen Namen des Recruiters/Ansprechpartners aus der folgenden Stellenbeschreibung.\n\nDer E-Mail-Kontakt für Bewerbungen ist: {email}\n\nStellenbeschreibung:\n{job_text}\n\nGib NUR den Namen zurück (z.B. \"Max Mustermann\"). Wenn kein Name gefunden wird, gib eine leere Zeile zurück."

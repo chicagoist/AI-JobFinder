@@ -1,0 +1,39 @@
+{
+  "personal_info": {
+    "first_name": "<Vorname>",
+    "last_name": "<Nachname>",
+    "email": "candidate.email@example.com",
+    "phone": "01521 1234567",
+    "address": "Hauptstr. 1",
+    "city": "60311 Frankfurt am Main",
+    "country": "Deutschland"
+  },
+  "languages": {
+    "Deutsch": "B2",
+    "Englisch": "A2"
+  },
+  "skills": [
+    "Linux",
+    "Python",
+    "Bash",
+    "PowerShell",
+    "Java",
+    "Git",
+    "Docker",
+    "Kommandozeile (Console)",
+    "Künstliche Intelligenz (AI / LLM)"
+  ],
+  "experience_years": 10.0,
+  "education": [
+    {
+      "degree": "Abschluss als Industriemechaniker",
+      "field": "Industriemechanik",
+      "institution": "Technische Schule",
+      "year": 2010
+    }
+  ],
+  "certifications": [
+    "AWS Certified Cloud Practitioner",
+    "Cisco CCST Networking"
+  ]
+}

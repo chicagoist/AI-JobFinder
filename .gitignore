@@ -1,0 +1,64 @@
+# Python caches
+__pycache__/
+*.pyc
+
+# Local chrome/playwright profiles
+temp_profile/
+browser-profile/
+src/chrome_data/
+src/chrome_data_Debug/
+src/C:*
+src/C:\*
+src/.mypy_cache/
+
+# Job Agent SQLite database, logs, and screenshots
+output/*.db
+output/*.db_*
+output/*.png
+output/*.zip
+src/output/*.db
+src/output/*.db_*
+src/output/*.png
+src/output/*.zip
+*.png
+
+# ============================================================
+# PERSONAL DATA — These files MUST NEVER be committed
+# ============================================================
+
+# Active configuration files with API keys and personal settings
+*_BACKUP
+config.yaml
+**/config.yaml
+candidate_profile.json
+**/candidate_profile.json
+.env
+
+# All PDF files (CV, Anschreiben, certificates — contain personal data)
+*.pdf
+
+# Generated HTML pages (may contain personal data from Playwright sessions)
+*.html
+output/*.html
+src/output/*.html
+
+# Generated/captured screenshots
+output/*.jpg
+src/output/*.jpg
+
+# Temporary/testing files
+job_test*.html
+job_test.txt
+*.log
+.pytest_cache/
+
+# Output directory (contains DB, PDFs, ZIPs — all personal data)
+output/
+src/output/
+
+# Lebenslauf file (explicit block — extra safety)
+Lebenslauf*.pdf
+Anschreiben*.pdf
+
+# Distribution archive
+Gemini-JobAgent-dist.zip
