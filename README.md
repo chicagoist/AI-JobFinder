@@ -144,7 +144,7 @@ flowchart TD
 
 - **Cross-platform**: Runs on Windows, Linux, and macOS. Set `chrome_data_dir` in `config.yaml` to match your OS (see sample file for examples).
 - **Windows**: Tested on Windows 11. Use `.\check_types.ps1` for type checking.
-- **Linux**: Tested on Kali Linux. Use `bash check_types.sh` for type checking.
+- **Linux**: Tested on Gentoo Linux. Use `bash check_types.sh` for type checking.
 - **PowerShell**: Used for coloured terminal output on Windows. On Linux/macOS, ANSI escape codes work natively.
 
 ### Chrome / Chromium
