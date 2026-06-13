@@ -7,6 +7,7 @@ import datetime
 import sqlite3
 import urllib.request
 import urllib.parse
+import re
 import warnings
 
 # Import common utilities and configuration loaders from the package
