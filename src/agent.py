@@ -513,8 +513,6 @@ def run_config_gui(config_path, criteria_path, profile_path, prompts_path):
     cancel_btn = ttk.Button(save_frame, text="Cancel (Use current configurations)", command=root.destroy)
     cancel_btn.pack(side="right", padx=5)
     
-    # Auto-dismiss GUI after 3 seconds if user doesn't interact (non-blocking for automated runs)
-    root.after(3000, root.destroy)
     root.mainloop()
 
 # Initialize Gemini API client
@@ -599,6 +597,8 @@ def parse_cv(cv_path, output_json_path, criteria_path=None):
     1. IT-Bereich (Systemadmin, Cloud, Support, Programmierung).
     2. Handwerklicher Bereich (Mechanische Montage, Schlosser, Instandhaltung).
     Berücksichtige BEIDE Pfade in 'job_search_directions' und 'target_vacancies'. Verwerfe NICHT den mechanischen Werdegang!
+    
+    WICHTIG: Extrahiere zu jedem Ausbildungseintrag (education) ein 'curriculum'-Feld mit den detaillierten Kursinhalten/Modulen, falls im Dokument beschrieben (z.B. Serveradministration, Active Directory, Azure, PowerShell, etc.). Dies hilft später beim Scoring gegen Stellenanforderungen.
     
     Hier ist der extrahierte Text des Lebenslaufs:
     --- START LEBENSLAUF ---
@@ -1739,24 +1739,7 @@ def get_browser_context(playwright_instance, config, headless=False):
             print(f"   Linux: google-chrome --remote-debugging-port=9222")
             print(f"{'!'*60}{Colors.END}")
             
-            # In headless mode, automatically fallback to a temporary profile without blocking
-            if headless:
-                print(f"{Colors.YELLOW}[Headless mode] Auto-fallback to temporary profile...{Colors.END}")
-            else:
-                # Ask the user if they want to fallback or exit
-                print(f"\n{Colors.CYAN}Do you want to fallback to a temporary profile? (You will need to login again){Colors.END}")
-                print(f"{Colors.YELLOW}Enter 'y' to continue with temp profile, or 'n' to exit and fix the browser: {Colors.END}", end="", flush=True)
-                
-                # In non-interactive environments, we might want to default to exit or temp
-                # Since this is a CLI, we try to read input
-                try:
-                    # Use a timeout for input if possible, but simple input is fine for CLI
-                    choice = input().strip().lower()
-                    if choice != 'y':
-                        print(f"{Colors.RED}Exiting. Please close your browser and try again.{Colors.END}")
-                        sys.exit(1)
-                except (EOFError, Exception):
-                    print(f"{Colors.YELLOW}Non-interactive session detected. Auto-fallback to temporary profile...{Colors.END}")
+            print(f"{Colors.YELLOW}Auto-fallback to temporary profile...{Colors.END}")
         
         # Final fallback: temp profile in current directory
         print(f"{Colors.YELLOW}Falling back to temporary profile...{Colors.END}")

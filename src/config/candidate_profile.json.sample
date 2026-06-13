@@ -29,7 +29,8 @@
       "degree": "Abschluss als Industriemechaniker",
       "field": "Industriemechanik",
       "institution": "Technische Schule",
-      "year": 2010
+      "year": 2010,
+      "curriculum": "Optional: Detaillierte Kursinhalte aus Zeugnis/Zertifikat"
     }
   ],
   "certifications": [

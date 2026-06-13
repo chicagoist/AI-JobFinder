@@ -129,3 +129,12 @@ python agent.py --reset-candidate
 10. **`compute_forbidden_titles()`** — Dynamically generates forbidden job titles based on candidate profile seniority per direction (IT Junior blocks Senior/Middle/Lead/Architect; Handwerk Expert allows all levels). Called once per job URL. Merged with static list from `job_criteria.yaml`.
 11. **`hr_assessment` in profile** — If empty, `compute_forbidden_titles()` falls back to "Global" mode (only blocks Projektmanager, Sales, Marketing Manager, HR). Re-run `--parse-cv` to populate.
 12. **`parse_cv()` uses `llm_request_with_fallback()`** — CV parsing now uses OpenRouter priority (if configured) instead of direct Gemini call. The `generation_config={"response_mime_type": "application/json"}` is intentionally omitted since OpenRouter doesn't support it; the prompt explicitly requests JSON.
+
+## Git Commit Policy
+
+- **After EVERY successful real test run** (any CLI command that completes without error), run:
+  ```bash
+  git add -A && git commit -m "fix: <kurze Beschreibung der Änderung>"
+  ```
+- Before committing, verify `git status` shows NO tracked active configs (`config.yaml`, `candidate_profile.json`, `.env`, `*.db`, `*.pdf`, `output/`, `chrome_data/`, `C:\*`)
+- Use present-tense imperative messages in English or German
