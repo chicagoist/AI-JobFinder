@@ -2297,7 +2297,6 @@ def search_indeed(page, keywords, location="Deutschland", radius=25):
                 page.wait_for_timeout(2000)
                 if page.locator(".job_seen_beacon").first.is_visible():
                     print(f"{Colors.GREEN}Verification solved! Re-navigating to search URL...{Colors.END}")
-                    # Re-navigate after Cloudflare to ensure page is on correct search results
                     try:
                         page.goto(url, wait_until="domcontentloaded", timeout=30000)
                         page.wait_for_selector(".job_seen_beacon", timeout=8000)
@@ -2320,7 +2319,16 @@ def search_indeed(page, keywords, location="Deutschland", radius=25):
             except Exception:
                 pass
             return []
-        
+    
+    # Check if Indeed returned no results (shows suggested jobs instead)
+    try:
+        content = page.content().lower()
+        if "keine jobs" in content or "keine treffer" in content or "0 ergebnisse" in content:
+            print(f"{Colors.YELLOW}Indeed returned no results for '{keywords}' in '{location}'. Skipping Indeed.{Colors.END}")
+            return []
+    except Exception:
+        pass
+    
     try:
         links = page.eval_on_selector_all(".jcs-JobTitle", "els => els.map(el => el.href)")
         print(f"{Colors.GREEN}Found {len(links)} job listings on Indeed.{Colors.END}")
