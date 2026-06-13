@@ -109,6 +109,9 @@ On every startup, `index_candidate_files()` in `agent.py`:
 | Add `generation_config={"response_mime_type": "application/json"}` to OpenRouter calls | OpenRouter doesn't support this Gemini parameter. Use explicit JSON instruction in prompt text instead. |
 | Change dedup logic in `is_already_applied()` | Matches by URL exact match OR cleaned company+title. Breaking this causes duplicate applications. |
 | Remove `try/except ALTER TABLE` in `db.py` | DB migrations are implicit. Removing the try/except crashes on existing databases. |
+| Forget `import re` and `import urllib.parse` | PLZ detection (`re.match(r"\d{5}")`) and URL encoding (`urllib.parse.quote()`) will fail. Both required for postal-code location support. |
+| Use bright CYAN for dividers / labels | Reduces readability. Use `Colors.GREY` (dimmed) for labels and dividers so values stand out. |
+| Skip `nargs="?"` on `--search-jobs` | Without it, `--search-jobs` without a value fails. `nargs="?"` allows empty query → show all vacancies. |
 
 ## Important Files
 
@@ -119,10 +122,12 @@ On every startup, `index_candidate_files()` in `agent.py`:
 
 ## Critical Gotchas
 
-1. **Chrome profile locking**: If Chrome is running, persistent context fails. Agent now auto-fallbacks to `temp_profile/` without asking.
+1. **Chrome profile locking**: If Chrome is running, persistent context fails. Agent now auto-fallbacks to `temp_profile/` without asking (interactive prompt removed).
 2. **LLM priority**: `config.yaml` `llm.priority: openrouter | gemini`. OpenRouter first → cheaper.
 3. **Headless → auto-approve**: `--headless` auto-enables `--auto-approve` (no browser window to review).
 4. **Indeed Cloudflare**: 45s wait for manual resolution. In headless mode, Indeed is effectively skipped.
 5. **Forbidden titles**: Dual career path — IT Junior blocks Senior/Middle/Lead/Architect; Handwerk Expert allows all.
 6. **SMTP fallback**: Port configured → 465 SSL. Direct email: 3 retry attempts. Batch: 2 attempts.
 7. **GUI no longer auto-closes**: Config GUI stays open until user clicks Save or Cancel.
+8. **PLZ location detection**: `--location "63517"` → Indeed uses URL-encoded `l=63517`, LinkedIn detects 5-digit PLZ via `re.match(r"\d{5}", location)` and appends `", Germany"` for geocoding. Requires `import re` and `import urllib.parse` in `agent.py`.
+9. **Output readability**: All labels (`Page title:`, `Company:`, `Job Title:`, `Match Score:`) use dimmed `Colors.GREY` with 2-space indent. Dividers use `Colors.GREY` instead of `Colors.CYAN` to let values (bright colors) stand out.

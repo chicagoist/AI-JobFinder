@@ -118,7 +118,7 @@ python agent.py --reset-candidate
 ## Notable Conventions & Gotchas
 
 1. **No dependency manifest** — No `requirements.txt` or `pyproject.toml`. Packages installed manually.
-2. **Chrome profile locking** — If Chrome is running, the agent connects via CDP on port 9222. Otherwise it launches a persistent context. Lock errors fall back to `temp_profile/`.
+2. **Chrome profile locking** — If Chrome is running, the agent connects via CDP on port 9222. Otherwise it launches a persistent context. Lock errors auto-fallback to `temp_profile/` **without prompting** (interactive `y/n` removed).
 3. **Headless auto-approve** — `--headless` auto-enables `--auto-approve` since there's no browser window to review applications.
 4. **API key rotation** — Multiple Gemini keys in `config.yaml` are rotated automatically. Falls back through cheaper models (`gemini-3.1-flash-lite` → `gemini-2.5-flash-lite` → `gemini-flash-latest`) before trying OpenRouter.
 5. **LLM priority** — `config.yaml` supports `llm.priority: gemini | openrouter`. Default is Gemini with OpenRouter fallback. When using OpenRouter, an `openrouter:` section in `config.yaml` is required with `api_key` and `model` fields.
@@ -129,6 +129,8 @@ python agent.py --reset-candidate
 10. **`compute_forbidden_titles()`** — Dynamically generates forbidden job titles based on candidate profile seniority per direction (IT Junior blocks Senior/Middle/Lead/Architect; Handwerk Expert allows all levels). Called once per job URL. Merged with static list from `job_criteria.yaml`.
 11. **`hr_assessment` in profile** — If empty, `compute_forbidden_titles()` falls back to "Global" mode (only blocks Projektmanager, Sales, Marketing Manager, HR). Re-run `--parse-cv` to populate.
 12. **`parse_cv()` uses `llm_request_with_fallback()`** — CV parsing now uses OpenRouter priority (if configured) instead of direct Gemini call. The `generation_config={"response_mime_type": "application/json"}` is intentionally omitted since OpenRouter doesn't support it; the prompt explicitly requests JSON.
+13. **PLZ location support** — `--location "63517"` → Indeed URL-encodes with `urllib.parse.quote()`, LinkedIn detects 5-digit PLZ via `re.match(r"\d{5}", location)` → appends `", Germany"`. Requires `import re` + `import urllib.parse` in `agent.py`.
+14. **Output colors** — Labels (`Page title:`, `Company:`, `Job Title:`, `Match Score:`) use `Colors.GREY` dimmed with 2-space indent. Dividers use `Colors.GREY` instead of `Colors.CYAN` so values (bright colors) contrast clearly.
 
 ## Git Commit Policy
 
