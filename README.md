@@ -1,6 +1,6 @@
 # Gemini-JobAgent
 
-Automated job application agent for the German-speaking job market. Scrapes job portals (Indeed, LinkedIn, StepStone, Monster, ARGE), evaluates vacancies through LLM scoring, generates personalised cover letters as PDF, and submits applications via direct email or web form autofill with Playwright.
+Automated job application agent for the German-speaking job market. Currently supports **Indeed** and **LinkedIn** — evaluates vacancies through LLM scoring, generates personalised cover letters as PDF, and submits applications via direct email or web form autofill with Playwright. Support for StepStone, Monster, Xing, Glassdoor and other platforms is planned for future releases.
 
 ---
 
