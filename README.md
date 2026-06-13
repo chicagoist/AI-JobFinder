@@ -4,6 +4,19 @@ Automated job application agent for the German-speaking job market. Currently su
 
 ---
 
+## 🔑 API Keys — Quick Overview / Schnellübersicht
+
+| Service | Where to get / Wo holen? | Usage / Verwendung |
+|---------|--------------------------|--------------------|
+| **Gemini** (primary LLM) | [🔗 aistudio.google.com/apikey](https://aistudio.google.com/apikey) | Job scoring, cover letters, CV parsing, recruiter extraction |
+| **OpenRouter** (free fallback) | [🔗 openrouter.ai/keys](https://openrouter.ai/keys) | Automatic fallback when Gemini keys are exhausted |
+
+> **DE:** Gemini ist der primäre KI-Dienst für Bewertung, Anschreiben und CV-Parsing.  
+> OpenRouter dient als kostenloses Fallback, wenn alle Gemini-Keys erschöpft sind.  
+> Beide sind in `src/config/config.yaml` konfigurierbar.
+
+---
+
 ## 🚀 Open Source — Fork & Improve
 
 **This project lives from the community!**  

@@ -7,6 +7,19 @@
 
 ---
 
+## 🔑 API-Schlüssel — Übersicht
+
+| Dienst | Bezugsquelle | Verwendung |
+|--------|-------------|------------|
+| **Gemini** (primär) | [🔗 aistudio.google.com/apikey](https://aistudio.google.com/apikey) | Job-Scoring, Anschreiben, CV-Parsing, Recruiter-Extraktion |
+| **OpenRouter** (Fallback) | [🔗 openrouter.ai/keys](https://openrouter.ai/keys) | Automatischer Fallback wenn alle Gemini-Keys erschöpft sind |
+
+> **EN:** Gemini is the primary LLM for scoring, cover letters and CV parsing.  
+> OpenRouter serves as free fallback when all Gemini keys are exhausted.  
+> Both are configured in `src/config/config.yaml`.
+
+---
+
 ## 📢 Einladung an die Community
 
 **Dieses Projekt lebt von der Gemeinschaft!**  
