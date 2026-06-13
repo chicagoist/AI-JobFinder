@@ -144,6 +144,13 @@ python agent.py --reset-candidate
 13. **PLZ location support** — `--location "63517"` → Indeed URL-encodes with `urllib.parse.quote()`, LinkedIn detects 5-digit PLZ via `re.match(r"\d{5}", location)` → appends `", Germany"`. Requires `import re` + `import urllib.parse` in `agent.py`.
 14. **Output colors** — Labels (`Page title:`, `Company:`, `Job Title:`, `Match Score:`) use `Colors.GREY` dimmed with 2-space indent. Dividers use `Colors.GREY` instead of `Colors.CYAN` so values (bright colors) contrast clearly.
 
+## Git Workflow (Pet Project Best Practices)
+
+- **Branching**: `main` ist der stabile/production Branch. **Sämtliche Entwicklung** findet im `develop` Branch statt.
+- **Keine direkten Commits auf `main`** — nur Merges von `develop` nach explizitem Befehl (`merge`).
+- Für größere Features können kurzlebige Feature-Branches von `develop` abgezweigt werden.
+- Vor einem Merge auf `main` immer `git status` prüfen (keine aktiven Configs, keine Secrets).
+
 ## Git Commit Policy
 
 - **After EVERY successful real test run** (any CLI command that completes without error), run:

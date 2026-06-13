@@ -79,6 +79,13 @@ On every startup, `index_candidate_files()` in `agent.py`:
 
 **Critical**: The `education` field must contain a `curriculum` entry with detailed course modules so the scoring LLM can match against job requirements. The `parse_cv()` prompt now requests this.
 
+## Git Workflow (Pet Project Best Practices)
+
+- **Branching**: `main` ist der stabile/production Branch. **Sämtliche Entwicklung** findet im `develop` Branch statt.
+- **Keine direkten Commits auf `main`** — nur Merges von `develop` nach explizitem Befehl (`merge`).
+- Für größere Features können kurzlebige Feature-Branches von `develop` abgezweigt werden.
+- Vor einem Merge auf `main` immer `git status` prüfen (keine aktiven Configs, keine Secrets).
+
 ## Git Commit Policy
 
 - **After EVERY successful real test run** (any CLI command that completes without error), run:
