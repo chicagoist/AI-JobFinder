@@ -19,6 +19,16 @@ My roadmap includes:
 → **Fork the repository**, create a Pull Request, or open an Issue.  
 → **Every contribution counts** — be it a new module, a bug fix, or better documentation.
 
+<p align="left">
+  <a href="https://addons.mozilla.org/en-GB/firefox/addon/job-matcher-ai/">
+    <img src="https://img.shields.io/badge/Firefox-🧩_Job_Matcher_AI-FF7139?style=for-the-badge&logo=firefox&logoColor=white"
+         alt="Job Matcher AI for Firefox"
+         width="320">
+  </a>
+  <br>
+  <sub>Companion extension — analyse job listings directly in your browser</sub>
+</p>
+
 ---
 
 ## Table of Contents
