@@ -1,12 +1,12 @@
 user_profile:
-  # Путь к вашей папке данных Chrome на Windows
+  # Path to your Chrome user data directory on Windows
   chrome_data_dir: "C:\\Users\\<Username>\\AppData\\Local\\Google\\Chrome\\User Data"
-  # Профиль Chrome (например, Default или Profile 1)
+  # Chrome profile (e.g. Default or Profile 1)
   chrome_profile: "Default"
-  # Путь к вашему файлу Lebenslauf (относительно src/ или абсолютный)
-  # Примеры: "../documents/Lebenslauf_Ivan_Ivanov.pdf"
+  # Path to your Lebenslauf PDF (relative to src/ or absolute)
+  # Examples: "../documents/Lebenslauf_YourName.pdf"
   cv_path: "../documents/Lebenslauf_UserName.pdf"
-  # Папка для дополнительных сертификатов и дипломов (относительно src/ или абсолютный)
+  # Directory for additional certificates and diplomas (relative to src/ or absolute)
   documents_dir: "../documents"
 
 defaults:

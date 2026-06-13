@@ -18,9 +18,7 @@ ko_filters:
     - TESA status
     - Secret clearance
     - Top Secret clearance
-  companies_blacklist:
-  - Zukunftsmotor
-  - Zukunftsmotor GmbH
+  companies_blacklist: []
   datacenter_physical_work:
     forbidden: true
     keywords: []
