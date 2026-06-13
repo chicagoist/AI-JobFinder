@@ -12,9 +12,12 @@ class Colors:
     YELLOW = '\033[93m'
     RED = '\033[91m'
     MAGENTA = '\033[95m'
+    GREY = '\033[90m'
+    DIM = '\033[2m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
     END = '\033[0m'
+    RESET = '\033[0m'
 
 # Handle Ctrl+C gracefully at the OS level to prevent traceback prints
 def handle_sigint(sig, frame):

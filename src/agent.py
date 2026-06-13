@@ -6,6 +6,7 @@ import yaml
 import datetime
 import sqlite3
 import urllib.request
+import urllib.parse
 import warnings
 
 # Import common utilities and configuration loaders from the package
@@ -1684,7 +1685,6 @@ def get_browser_context(playwright_instance, config, headless=False):
 
     # Try connecting to an existing debugging session first
     try:
-        import urllib.request
         urllib.request.urlopen("http://127.0.0.1:9222/json/version", timeout=1)
         print(f"{Colors.GREEN}Found active browser session on port 9222. Connecting...{Colors.END}")
         browser = playwright_instance.chromium.connect_over_cdp("http://127.0.0.1:9222")
@@ -1872,9 +1872,9 @@ def fill_page_form(page, candidate_profile, config, anschreiben_path, cv_path):
 def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_approve=False, criteria_path=None, tee=None, workspace_dir=None):
     if criteria_path is None:
         criteria_path = os.path.join(os.path.dirname(__file__), "config", "job_criteria.yaml")
-    print(f"\n{Colors.CYAN}{'='*80}{Colors.END}")
+    print(f"\n{Colors.GREY}{'='*80}{Colors.END}")
     print(f"{Colors.CYAN}{Colors.BOLD}Processing vacancy: {Colors.END}{Colors.BLUE}{Colors.UNDERLINE}{url}{Colors.END}")
-    print(f"{Colors.CYAN}{'-'*80}{Colors.END}")
+    print(f"{Colors.GREY}{'-'*80}{Colors.END}")
     try:
         page.goto(url, wait_until="domcontentloaded", timeout=30000)
     except Exception as e:
@@ -1886,7 +1886,7 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
         pass
     
     page_title = page.title()
-    print(f"Page title: {Colors.CYAN}{page_title}{Colors.END}")
+    print(f"  {Colors.GREY}Page title:{Colors.END} {Colors.CYAN}{page_title}{Colors.END}")
     
     # Extract body text for matching
     job_text = page.locator("body").inner_text()
@@ -2015,19 +2015,19 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
             if job_title == "Unbekannt":
                 job_title = page_title[:50]
                 
-    print(f"Company: {Colors.CYAN}{company_name}{Colors.END}")
-    print(f"Job Title: {Colors.CYAN}{job_title}{Colors.END}")
+    print(f"  {Colors.GREY}Company:{Colors.END} {Colors.CYAN}{company_name}{Colors.END}")
+    print(f"  {Colors.GREY}Job Title:{Colors.END} {Colors.CYAN}{job_title}{Colors.END}")
     
     if is_already_applied(conn, company_name, job_title, url):
         print(f"{Colors.YELLOW}Skipping: You have already applied for this position or at this company recently.{Colors.END}")
-        print(f"{Colors.CYAN}{'='*80}{Colors.END}\n")
+        print(f"{Colors.GREY}{'='*80}{Colors.END}\n")
         return
         
     # Check excluded companies
     excluded_companies = criteria.get("ko_filters", {}).get("companies_blacklist", [])
     if any(ex.lower() in company_name.lower() for ex in excluded_companies):
         print(f"{Colors.YELLOW}Skipping: Company '{company_name}' is in the excluded companies list.{Colors.END}")
-        print(f"{Colors.CYAN}{'='*80}{Colors.END}\n")
+        print(f"{Colors.GREY}{'='*80}{Colors.END}\n")
         return
         
     # Check forbidden job titles (static from config + dynamic from profile-based algorithm)
@@ -2037,7 +2037,7 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
     if any(ft.lower() in job_title.lower() for ft in forbidden_titles):
         print(f"{Colors.YELLOW}Skipping: Job title '{job_title}' matches forbidden title/role.{Colors.END}")
         log_application(conn, company_name, job_title, url, 0.0, "Skipped (Low Score)")
-        print(f"{Colors.CYAN}{'='*80}{Colors.END}\n")
+        print(f"{Colors.GREY}{'='*80}{Colors.END}\n")
         return
 
         
@@ -2061,15 +2061,15 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
     min_score = criteria.get("scoring", {}).get("min_score_to_apply", 8.0)
     is_ko = score_data.get("ko_criterion_triggered", False)
     if total_score >= min_score and not is_ko:
-        print(f"Match Score: {Colors.GREEN}{Colors.BOLD}{total_score}/10 (PASSED){Colors.END}")
+        print(f"  {Colors.GREY}Match Score:{Colors.END} {Colors.GREEN}{Colors.BOLD}{total_score}/10 (PASSED){Colors.END}")
     else:
-        print(f"Match Score: {Colors.RED}{Colors.BOLD}{total_score}/10 (FAILED){Colors.END}")
+        print(f"  {Colors.GREY}Match Score:{Colors.END} {Colors.RED}{Colors.BOLD}{total_score}/10 (FAILED){Colors.END}")
         
     if total_score < min_score or is_ko:
         reason = score_data.get("reasoning", "Below minimum matching score threshold.")
         print(f"{Colors.RED}Skipping job: {reason}{Colors.END}")
         log_application(conn, company_name, job_title, url, total_score, "Skipped (Low Score)")
-        print(f"{Colors.CYAN}{'='*80}{Colors.END}\n")
+        print(f"{Colors.GREY}{'='*80}{Colors.END}\n")
         return
         
     # Generate Cover Letter
@@ -2117,7 +2117,7 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
                 log_application(conn, company_name, job_title, url, total_score, "Applied (Direct Email Failed)",
                               terminal_output=tee.getvalue() if tee else "", pdf_path=anschreiben_pdf_path)
                 print(f"{Colors.YELLOW}Direct email sending failed, but logged as 'Applied (Direct Email Failed)'.{Colors.END}")
-            print(f"\n{Colors.CYAN}{'='*80}{Colors.END}\n")
+            print(f"\n{Colors.GREY}{'='*80}{Colors.END}\n")
             return
     
     # Fill form
@@ -2211,17 +2211,18 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
             else:
                 log_application(conn, company_name, job_title, url, total_score, "Self-rejection", terminal_output=tee.getvalue() if tee else "", pdf_path=anschreiben_pdf_path)
 
-    print(f"\n{Colors.CYAN}{'='*80}{Colors.END}\n")
+    print(f"\n{Colors.GREY}{'='*80}{Colors.END}\n")
 
 # Search Indeed for job listings matching the query
 def search_indeed(page, keywords, location="Deutschland", radius=25):
     print(f"{Colors.BLUE}Searching Indeed for '{keywords}' in '{location}' with radius {radius}km...{Colors.END}")
     query = "+".join(keywords.split())
-    url = f"https://de.indeed.com/jobs?q={query}&l={location}&radius={radius}"
+    loc_encoded = urllib.parse.quote(location)
+    url = f"https://de.indeed.com/jobs?q={query}&l={loc_encoded}&radius={radius}"
     try:
         page.goto(url, wait_until="domcontentloaded", timeout=30000)
     except Exception as e:
-        print(f"Warning: page.goto to Indeed took too long or failed: {e}. Trying to proceed anyway...")
+        print(f"{Colors.YELLOW}Warning: page.goto to Indeed took too long or failed: {e}. Trying to proceed anyway...{Colors.END}")
     
     try:
         page.wait_for_selector(".job_seen_beacon", timeout=8000)
@@ -2233,7 +2234,7 @@ def search_indeed(page, keywords, location="Deutschland", radius=25):
             if "verifizierung" in content_lower or "cloudflare" in content_lower or page.locator("iframe[src*='challenges']").is_visible():
                 is_cloudflare = True
         except Exception as e:
-            print(f"Warning: Could not check for Cloudflare (page might be navigating): {e}")
+            print(f"{Colors.YELLOW}Warning: Could not check for Cloudflare (page might be navigating): {e}{Colors.END}")
             page.wait_for_timeout(2000)
             try:
                 content_lower = page.content().lower()
@@ -2277,7 +2278,7 @@ def search_indeed(page, keywords, location="Deutschland", radius=25):
         print(f"{Colors.GREEN}Found {len(links)} job listings on Indeed.{Colors.END}")
         return links
     except Exception as e:
-        print(f"Error extracting Indeed links: {e}")
+        print(f"{Colors.RED}Error extracting Indeed links: {e}{Colors.END}")
         return []
 
 # Search LinkedIn for job listings matching the query
@@ -2299,7 +2300,7 @@ def search_linkedin(page, keywords, location="Germany", radius=25):
     try:
         page.goto(url, wait_until="domcontentloaded", timeout=30000)
     except Exception as e:
-        print(f"Warning: page.goto to LinkedIn took too long or failed: {e}. Trying to proceed anyway...")
+        print(f"{Colors.YELLOW}Warning: page.goto to LinkedIn took too long or failed: {e}. Trying to proceed anyway...{Colors.END}")
     
     # Try to close guest login modal if it shows up
     try:
@@ -2321,7 +2322,7 @@ def search_linkedin(page, keywords, location="Germany", radius=25):
             if "einloggen" in content_lower or "sign in" in content_lower:
                 is_login_wall = True
         except Exception as e:
-            print(f"Warning: Could not check for LinkedIn login wall (page might be navigating): {e}")
+            print(f"{Colors.YELLOW}Warning: Could not check for LinkedIn login wall (page might be navigating): {e}{Colors.END}")
             page.wait_for_timeout(2000)
             try:
                 content_lower = page.content().lower()
@@ -2383,8 +2384,10 @@ def search_linkedin(page, keywords, location="Germany", radius=25):
         print(f"{Colors.GREEN}Found {len(links)} job listings on LinkedIn.{Colors.END}")
         return links
     except Exception as e:
-        print(f"Error extracting LinkedIn links: {e}")
+        print(f"{Colors.RED}Error extracting LinkedIn links: {e}{Colors.END}")
         return []
+
+
 
 def main():
     parser = argparse.ArgumentParser(description="JobAgent - Automate job applications in Germany")
@@ -2608,7 +2611,13 @@ def main():
                     except Exception as e:
                         print(f"{Colors.RED}Indeed search failed: {e}. Continuing with LinkedIn only...{Colors.END}")
                         indeed_links = []
-                    linkedin_loc = "Germany" if args.location.lower() in ("deutschland", "germany") else args.location
+                    raw_loc = args.location
+                    if re.match(r'^\d{5}$', raw_loc):
+                        linkedin_loc = f"{raw_loc}, Germany"
+                    elif raw_loc.lower() in ("deutschland", "germany"):
+                        linkedin_loc = "Germany"
+                    else:
+                        linkedin_loc = raw_loc
                     try:
                         linkedin_links = search_linkedin(search_page, search_query, linkedin_loc, args.radius)
                     except Exception as e:
