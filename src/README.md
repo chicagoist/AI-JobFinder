@@ -135,7 +135,7 @@ Das Tool unterstützt derzeit **Indeed** und **LinkedIn** als Quellen für Stell
 ## 🏗️ Architektur-Übersicht
 
 ```
-Gemini-JobAgent/
+AI-JobFinder/
 ├── agent.py                        # Haupt-Einstiegspunkt (~2600 Zeilen)
 │   ├── CLI-Argument-Parser
 │   ├── Tkinter-GUI (config editor)

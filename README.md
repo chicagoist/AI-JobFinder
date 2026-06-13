@@ -1,4 +1,4 @@
-# Gemini-JobAgent
+# AI-JobFinder
 
 Automated job application agent for the German-speaking job market. Currently supports **Indeed** and **LinkedIn** — evaluates vacancies through LLM scoring, generates personalised cover letters as PDF, and submits applications via direct email or web form autofill with Playwright. Support for StepStone, Monster, Xing, Glassdoor and other platforms is planned for future releases.
 
@@ -215,7 +215,7 @@ python -c "import sqlite3; print('SQLite', sqlite3.sqlite_version); from google 
 After extracting the archive, your project should look like this:
 
 ```
-Gemini-JobAgent/
+AI-JobFinder/
 ├── README.md
 ├── .gitignore
 ├── requirements.txt
