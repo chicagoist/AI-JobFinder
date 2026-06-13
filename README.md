@@ -104,6 +104,8 @@ If `score < min_score_to_apply` (default 5.0), the vacancy is logged as `Skipped
 
 ## Pipeline Diagram
 
+The diagram below shows the current architecture for job portals **LinkedIn** and **Indeed**. As the project evolves and new platforms (StepStone, Xing, Monster, Glassdoor) are added, this pipeline may change or be extended.
+
 ```mermaid
 flowchart TD
     START["🎯 JOB URL / SEARCH"] --> CHECK{is_already_applied?<br/>SQLite lookup}
