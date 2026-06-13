@@ -104,73 +104,28 @@ If `score < min_score_to_apply` (default 5.0), the vacancy is logged as `Skipped
 
 ## Pipeline Diagram
 
+```mermaid
+flowchart TD
+    START["🎯 JOB URL / SEARCH"] --> CHECK{is_already_applied?<br/>SQLite lookup}
+    CHECK -- "YES<br/>(duplicate)" --> SKIP1["⏭️ SKIP"]
+    CHECK -- "NO" --> LOAD["🌐 Playwright load<br/>+ dead-link detection"]
+    LOAD --> KO{KO filter check<br/>10 filter types}
+    KO -- "KO hit" --> SKIP2["⏭️ SKIP"]
+    KO -- "OK" --> LLM["🤖 LLM scoring<br/>0–10"]
+    LLM --> SCORE{Score ≥ 5.0?}
+    SCORE -- "No<br/>&lt; 5.0" --> SKIP3["⏭️ SKIP"]
+    SCORE -- "Yes<br/>≥ 5.0" --> ANSCHREIBEN["📄 Anschreiben PDF<br/>Gemini + PDF"]
+    ANSCHREIBEN --> EMAIL{Email found?}
+    EMAIL -- "Yes" --> DIRECT["📧 send_direct_email()<br/>1 session: recruiter + CC"]
+    DIRECT --> DIR_OK["✅ Applied<br/>(Direct Email)"]
+    DIRECT --> DIR_FAIL["❌ Applied<br/>(Direct Email Failed)"]
+    EMAIL -- "No" --> FILLER["📝 Form filler<br/>(Playwright)"]
+    FILLER --> FILLED{Form filled?}
+    FILLED -- "Yes" --> APP["✅ APPLIED"]
+    FILLED -- "No (0 actions)" --> FALLBACK["📧 Fallback email<br/>to candidate"]
+    FALLBACK --> FB_OK["✅ Applied<br/>(Email)"]
+    FALLBACK --> FB_FAIL["❌ Applied<br/>(Email Failed)"]
 ```
-                        ┌─────────────────────────┐
-                        │     JOB URL / SEARCH     │
-                        └─────────┬───────────────┘
-                                  │
-                                  ▼
-                    ┌─────────────────────────┐
-                    │  is_already_applied()   │
-                    │     (SQLite lookup)      │
-                    └──────┬──────────┬───────┘
-                           │ YES      │ NO
-                           ▼          ▼
-                        SKIP    ┌─────────────────┐
-                                │ Playwright load  │
-                                │  + dead-link     │
-                                │    detection     │
-                                └────────┬────────┘
-                                         │
-                                         ▼
-                               ┌───────────────────┐
-                               │  KO filter check   │
-                               │ (10 filter types)  │
-                               └────┬──────────┬────┘
-                                    │ KO hit   │ OK
-                                    ▼          ▼
-                                 SKIP    ┌────────────┐
-                                         │ LLM scoring│
-                                         │  (0–10)    │
-                                         └─────┬──────┘
-                                          │          │
-                                      < 5.0      ≥ 5.0
-                                          │          │
-                                          ▼          ▼
-                                       SKIP    ┌──────────────┐
-                                               │ Anschreiben  │
-                                               │  PDF (Gemini │
-                                               │  + ReportLab)│
-                                               └──────┬───────┘
-                                                      │
-                                              ┌───────┴───────┐
-                                              │               │
-                                          Email found    No email
-                                              │               │
-                                              ▼               ▼
-                                    ┌────────────────┐ ┌──────────────┐
-                                    │ send_direct_   │ │ Form filler  │
-                                    │ email()        │ │ (Playwright) │
-                                    │ 1 session:     │ └──────┬───────┘
-                                    │ recruiter + CC │    │         │
-                                    └───────┬────────┘  filled  0 actions
-                                       │    │              │         │
-                                       │    │              ▼         ▼
-                                    success fail       APPLIED  ┌──────────┐
-                                       │    │                     │ Fallback │
-                                       ▼    ▼                     │ email to │
-                                   APPLIED  APPLIED              │ candidate│
-                                   (Direct   (Direct              └────┬─────┘
-                                   Email)    Email                   │    │
-                                             Failed)             success fail
-                                                                   │    │
-                                                                   ▼    ▼
-                                                               APPLIED  APPLIED
-                                                               (Email)  (Email
-                                                                        Failed)
-```
-
----
 
 ## Requirements
 
@@ -187,9 +142,10 @@ If `score < min_score_to_apply` (default 5.0), the vacancy is logged as `Skipped
 
 ### Operating System
 
-- **Windows**: Fully supported (tested on Windows 11). Chrome must be installed. Paths use `\` separators.
-- **Linux/macOS**: Should work with minor path adjustments (`chrome_data_dir` paths differ). Not tested.
-- **PowerShell**: Required for the recommended CLI commands. The agent uses `powershell` escape codes for coloured output.
+- **Cross-platform**: Runs on Windows, Linux, and macOS. Set `chrome_data_dir` in `config.yaml` to match your OS (see sample file for examples).
+- **Windows**: Tested on Windows 11. Use `.\check_types.ps1` for type checking.
+- **Linux**: Tested on Kali Linux. Use `bash check_types.sh` for type checking.
+- **PowerShell**: Used for coloured terminal output on Windows. On Linux/macOS, ANSI escape codes work natively.
 
 ### Chrome / Chromium
 

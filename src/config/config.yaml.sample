@@ -1,6 +1,9 @@
 user_profile:
-  # Path to your Chrome user data directory on Windows
-  chrome_data_dir: "C:\\Users\\<Username>\\AppData\\Local\\Google\\Chrome\\User Data"
+  # Path to your Chrome user data directory
+  # Windows: "C:\\Users\\<Username>\\AppData\\Local\\Google\\Chrome\\User Data"
+  # Linux:   "~/.config/google-chrome" or "/home/<User>/.config/google-chrome"
+  # macOS:   "~/Library/Application Support/Google/Chrome"
+  chrome_data_dir: "~/.config/google-chrome"
   # Chrome profile (e.g. Default or Profile 1)
   chrome_profile: "Default"
   # Path to your Lebenslauf PDF (relative to src/ or absolute)
