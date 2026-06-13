@@ -77,6 +77,10 @@ Gemini-JobAgent-dist.zip
 !/README.md
 !src/README.md
 !/src/README.md
+!AGENTS.md
+!/AGENTS.md
+!src/knowledge.md
+!/src/knowledge.md
 
 # Test files used during development (not part of the core app)
 src/mock_jobs.py
