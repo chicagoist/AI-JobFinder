@@ -2217,7 +2217,7 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
         print("Review the form, upload any other required files, and click 'Submit' yourself.")
         print("="*50 + f"{Colors.END}")
         try:
-            choice = input("Press Enter AFTER you submit the application to log it, or type 'cancel' to skip logging: ").strip().lower()
+            choice = input("After submitting the form in the browser, press Enter to log as 'Applied'. Type 'cancel' to skip: ").strip().lower()
         except (EOFError, KeyboardInterrupt):
             choice = "cancel"
             print()
@@ -2296,7 +2296,13 @@ def search_indeed(page, keywords, location="Deutschland", radius=25):
             for _ in range(22):
                 page.wait_for_timeout(2000)
                 if page.locator(".job_seen_beacon").first.is_visible():
-                    print(f"{Colors.GREEN}Verification solved! Proceeding...{Colors.END}")
+                    print(f"{Colors.GREEN}Verification solved! Re-navigating to search URL...{Colors.END}")
+                    # Re-navigate after Cloudflare to ensure page is on correct search results
+                    try:
+                        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                        page.wait_for_selector(".job_seen_beacon", timeout=8000)
+                    except Exception:
+                        pass
                     break
             else:
                 print(f"{Colors.YELLOW}Warning: Timeout waiting for Indeed job cards after Cloudflare prompt. The page might be blocked or empty.{Colors.END}")
@@ -2355,6 +2361,12 @@ def search_linkedin(page, keywords, location="Germany", radius=25):
     except Exception:
         pass
 
+    # Re-navigate after modal dismiss to ensure search params are preserved
+    try:
+        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+    except Exception as e:
+        print(f"{Colors.YELLOW}Warning: Re-navigation to LinkedIn search failed: {e}. Trying to proceed...{Colors.END}")
+
     try:
         page.wait_for_selector(".job-card-container, .job-card-list__title, .jobs-search__results-list li", timeout=8000)
     except Exception:
@@ -2389,7 +2401,11 @@ def search_linkedin(page, keywords, location="Germany", radius=25):
                 except Exception:
                     pass
                 if page.locator(".job-card-container, .job-card-list__title, .jobs-search__results-list li").first.is_visible():
-                    print(f"{Colors.GREEN}Login wall cleared! Proceeding...{Colors.END}")
+                    print(f"{Colors.GREEN}Login wall cleared! Re-navigating to search URL...{Colors.END}")
+                    try:
+                        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                    except Exception:
+                        pass
                     break
             else:
                 print(f"{Colors.YELLOW}Warning: Timeout waiting for LinkedIn job cards.{Colors.END}")
