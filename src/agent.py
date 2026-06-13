@@ -2035,7 +2035,7 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
     forbidden_titles_static = criteria.get("ko_filters", {}).get("forbidden_titles", [])
     forbidden_titles_dynamic = compute_forbidden_titles(candidate_profile)
     forbidden_titles = list(set(forbidden_titles_static + forbidden_titles_dynamic))
-    if any(ft.lower() in job_title.lower() for ft in forbidden_titles):
+    if any(re.search(r'\b' + re.escape(ft) + r'\b', job_title, re.IGNORECASE) for ft in forbidden_titles):
         print(f"{Colors.YELLOW}Skipping: Job title '{job_title}' matches forbidden title/role.{Colors.END}")
         log_application(conn, company_name, job_title, url, 0.0, "Skipped (Low Score)")
         print(f"{Colors.GREY}{'='*80}{Colors.END}\n")
@@ -2634,6 +2634,10 @@ def main():
                 
                 # Combine all links without duplicates
                 all_links = list(set(indeed_links + linkedin_links))
+                MAX_LINKS = 25
+                if len(all_links) > MAX_LINKS:
+                    print(f"{Colors.YELLOW}Limiting to first {MAX_LINKS} links.{Colors.END}")
+                    all_links = all_links[:MAX_LINKS]
                 print(f"\n{Colors.MAGENTA}{Colors.BOLD}Combined search results: Found {len(all_links)} unique listings to process.{Colors.END}")
                 if not args.headless:
                     print(f"{Colors.GREEN}{Colors.BOLD}>>> Browser pages will remain open — watch the agent work!{Colors.END}")
