@@ -1,5 +1,7 @@
 # AI-JobFinder
 
+**⚠️ BETA — This project is in early beta. Features, configuration, and data formats may change without notice. Use at your own risk.**
+
 Automated job application agent for the German-speaking job market. Currently supports **Indeed** and **LinkedIn** — evaluates vacancies through LLM scoring, generates personalised cover letters as PDF, and submits applications via direct email or web form autofill with Playwright. Support for StepStone, Monster, Xing, Glassdoor and other platforms is planned for future releases.
 
 ---
