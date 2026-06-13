@@ -22,10 +22,7 @@ cover_letter_prompt: "Du bist ein Experte für Karriere und Bewerbungen in Deuts
   \ Erstelle ein modernes, überzeugendes Anschreiben (Cover Letter) auf Deutsch für\
   \ folgende Rolle.\n\nKandidatenprofil (JSON):\n{candidate_profile}\n\nStellenbeschreibung\
   \ (Job Description):\n{job_description}\n\nBewerbungs-Einstellungen:\n- Gehaltsvorstellung:\
-  \ {salary_exp}\n- Verfügbarkeit / Kündigungsfrist: {availability}\n- IT-Erfahrung:\
-  \ Relevanter IT-Werdegang begann im Jahr {career_start_year}. Formuliere seine Erfahrung\
-  \ präzise und übertreibe nicht (nicht \"30 Jahre IT-Erfahrung\" schreiben, da dies\
-  \ irreführend ist; er war zuvor Industriemechaniker).\n\nRichtlinien für den Text:\n\
+  \ {salary_exp}\n- Verfügbarkeit / Kündigungsfrist: {availability}\n{career_context}\n\nRichtlinien für den Text:\n\
   1. **Wahrheitspflicht (Strict Truthfulness - CRITICAL)**:\n   - Erfinde KEINE Fähigkeiten,\
   \ Technologien oder Erfahrungen, die nicht im Kandidatenprofil aufgeführt sind.\
   \ \n   - Wenn die Stellenbeschreibung Technologien fordert, die der Kandidat nicht\
@@ -33,13 +30,7 @@ cover_letter_prompt: "Du bist ein Experte für Karriere und Bewerbungen in Deuts
   \ er diese beherrscht. Konzentriere dich stattdessen auf seine tatsächlichen Stärken\
   \ aus dem Profil wie Linux/Windows-Serveradministration, Skripting (Bash, PowerShell,\
   \ Python) und Cloud-Grundlagen (Azure).\n   - Der Wert \"experience_years\" (ca.\
-  \ 30 Jahre) bezieht sich auf die gesamte berufliche Laufbahn (inkl. früherer technischer\
-  \ Berufe wie Industriemechaniker). Seine IT-Erfahrung (Netzwerke, Linux-Administration)\
-  \ begann als Freelancer ab {career_start_year} (bzw. intensiviert durch aktuelle\
-  \ Weiterbildungen ab 2025). Stelle seine IT-Erfahrung wahrheitsgemäß dar (z.B. \"\
-  mit meiner langjährigen Erfahrung in der Web-Systemadministration seit {career_start_year}...\"\
-  \ oder \"als angehender IT-Administrator...\"). Behaupte auf keinen Fall, dass er\
-  \ 30 Jahre IT-Erfahrung hat!\n2. **Stil und Aufbau (German Business Style)**:\n\
+{industry_skills_context}\n2. **Stil und Aufbau (German Business Style)**:\n\
   \   - Nutze professionelle deutsche Bewerbungsformulierungen (z.B. \"mit großem\
   \ Interesse habe ich Ihre Stellenausschreibung für einen [Position] auf [Quelle]\
   \ gelesen.\").\n   - Gliedere das Anschreiben klar in:\n     - Einleitung (Bezug\
@@ -128,7 +119,7 @@ form_filler_prompt: 'Du bist ein KI-Assistent, der Webformulare ausfüllt. Dir l
 
   Gib NUR das reine JSON-Dokument zurück (eine Liste von Aktionen), ohne Erklärungen
   oder Markdown-Tags.'
-scoring_prompt: "Du bist ein erfahrener IT-Recruiter in Deutschland. Vergleiche das\
+scoring_prompt: "{industry_persona} Vergleiche das\
   \ Kandidatenprofil mit der Stellenbeschreibung (Job Description).\nBewerte das Match\
   \ auf einer Skala von 0 bis 10.\n\nKandidatenprofil:\n{candidate_profile}\n\nStellenbeschreibung:\n\
   {job_description}\n{rejections_str}\n\nBewerte nach folgenden Kriterien:\n1. **Hard\
@@ -186,13 +177,7 @@ scoring_prompt: "Du bist ein erfahrener IT-Recruiter in Deutschland. Vergleiche 
   \ den Score auf 0 und ko_criterion_triggered auf true.\n  AUSNAHME: Wenn es sich\
   \ um ein konkretes Praktikum (Praxisphase/Praxis) bei/über einen solchen Anbieter\
   \ handelt, das hervorragend zu den Hard Skills des Kandidaten passt (insb. Linux-Administration,\
-  \ Perl, Java, Python), darf der Score regulär berechnet werden.\n- Full Stack Developer:\
-  \ Wenn die Stelle oder der Titel für einen Full Stack Developer, Fullstack-Entwickler\
-  \ oder Ähnliches ausgeschrieben ist (der Kandidat sucht primär Systemadministration,\
-  \ Linux-Administration oder reine Backend-Rollen und schließt Full Stack aus), setze\
-  \ den Gesamtscore SOFORT auf 0 und ko_criterion_triggered auf true.\
-  \ - Deutsch-Sprachniveau (C1/C2 als K.O.): Wenn die Stelle Deutsch C1, C2 oder \"verhandlungssicher\" zwingend voraussetzt (auch bei \"erwünscht\" oder \"gewünscht\"), setze den Gesamtscore SOFORT auf 0 und ko_criterion_triggered auf true. Der Kandidat spricht Deutsch nur auf Niveau {candidate_german} und erfüllt damit keine über B2 hinausgehenden Anforderungen.\
-  \ - Consultant oder Support-Titel: Wenn die Position \"Consultant\" oder \"Support\" im Titel führt (z.B. IT Consultant, Support Engineer), setze den Gesamtscore SOFORT auf 0 und ko_criterion_triggered auf true.\n\nGib NUR das\
+  \ Perl, Java, Python), darf der Score regulär berechnet werden.\n{industry_ko_rules}\n- Deutsch-Sprachniveau (C1/C2 als K.O.): Wenn die Stelle Deutsch C1, C2 oder \"verhandlungssicher\" zwingend voraussetzt (auch bei \"erwünscht\" oder \"gewünscht\"), setze den Gesamtscore SOFORT auf 0 und ko_criterion_triggered auf true. Der Kandidat spricht Deutsch nur auf Niveau {candidate_german} und erfüllt damit keine über B2 hinausgehenden Anforderungen.\n\nGib NUR das\
   \ reine JSON-Dokument zurück, ohne zusätzliche Erklärung, Markdown-Tags (wie ```json)\
   \ oder Formatierung.\n\nStruktur des erwarteten JSON:\n{{\n  \"scores\": {{\n  \
   \  \"hard_skills\": 0.0,\n    \"experience\": 0.0,\n    \"languages\": 0.0,\n  \

@@ -400,6 +400,12 @@ def run_config_gui(config_path, criteria_path, profile_path, prompts_path):
     user_rejected_reasons_text = scrolledtext.ScrolledText(tab4, width=50, height=4, font=('Segoe UI', 9))
     user_rejected_reasons_text.grid(row=24, column=0, columnspan=2, padx=10, pady=3, sticky="w")
     user_rejected_reasons_text.insert("1.0", "\n".join(ko.get("user_rejected_reasons", [])))
+    
+    search_cfg = criteria_data.get("search", {})
+    ttk.Label(tab4, text="Search Industry:").grid(row=25, column=0, sticky="w", padx=10, pady=5)
+    industry_var = tk.StringVar(value=search_cfg.get("industry", "IT"))
+    industry_combo = ttk.Combobox(tab4, textvariable=industry_var, values=["IT", "Handwerk", "Allgemein"], state="readonly", width=15)
+    industry_combo.grid(row=25, column=1, sticky="w", padx=10, pady=5)
 
     def save_and_close():
         edited_prompts[last_selected] = prompt_text_widget.get("1.0", tk.END).strip()
@@ -486,7 +492,11 @@ def run_config_gui(config_path, criteria_path, profile_path, prompts_path):
             criteria_data["cover_letter"]["career_start_year"] = int(career_start_entry.get().strip())
         except ValueError:
             criteria_data["cover_letter"]["career_start_year"] = 2010
-            
+        
+        if "search" not in criteria_data:
+            criteria_data["search"] = {}
+        criteria_data["search"]["industry"] = industry_var.get()
+        
         mand_skills_raw = mand_skills_text.get("1.0", tk.END).strip()
         criteria_data["cover_letter"]["mandatory_skills"] = [s.strip() for s in mand_skills_raw.split("\n") if s.strip()]
         
@@ -1351,6 +1361,18 @@ def score_job(candidate_profile, job_description, config, criteria, past_rejecti
     spam_keywords = criteria.get("ko_filters", {}).get("spam_providers", {}).get("blocked_keywords", [])
     career_start_year = criteria.get("cover_letter", {}).get("career_start_year", 2010)
     
+    industry = criteria.get("search", {}).get("industry", "IT")
+    industry_persona = {
+        "IT": "Du bist ein erfahrener IT-Recruiter in Deutschland.",
+        "Handwerk": "Du bist ein erfahrener Personalberater für Handwerk und Produktion in Deutschland.",
+        "Allgemein": "Du bist ein erfahrener Personalberater in Deutschland."
+    }.get(industry, "Du bist ein erfahrener Personalberater in Deutschland.")
+    industry_ko_rules = {
+        "IT": '- Full Stack Developer: Wenn die Stelle oder der Titel für einen Full Stack Developer, Fullstack-Entwickler oder Ähnliches ausgeschrieben ist, setze den Gesamtscore SOFORT auf 0 und ko_criterion_triggered auf true.\\n- Consultant oder Support-Titel: Wenn die Position "Consultant" oder "Support" im Titel führt (z.B. IT Consultant, Support Engineer), setze den Gesamtscore SOFORT auf 0 und ko_criterion_triggered auf true.',
+        "Handwerk": "",
+        "Allgemein": ""
+    }.get(industry, "")
+    
     rejections_str = ""
     if past_rejections:
         rejections_str = "\nBisherige Ablehnungsgründe des Kandidaten (vermeide Stellen mit ähnlichen Kriterien/Ausschlusskriterien):\n"
@@ -1369,7 +1391,9 @@ def score_job(candidate_profile, job_description, config, criteria, past_rejecti
         certifications=", ".join(certifications),
         min_salary=min_salary,
         spam_keywords=", ".join(spam_keywords),
-        datacenter_keywords=", ".join(datacenter_keywords)
+        datacenter_keywords=", ".join(datacenter_keywords),
+        industry_persona=industry_persona,
+        industry_ko_rules=industry_ko_rules
     )
     try:
         response = llm_request_with_fallback(prompt)
@@ -1396,6 +1420,21 @@ def generate_anschreiben(candidate_profile, job_description, config, criteria=No
     career_start_year = criteria.get("cover_letter", {}).get("career_start_year", 2010)
     mandatory_skills = criteria.get("cover_letter", {}).get("mandatory_skills", ["Java", "Perl", "Kommandozeile (Console)", "Künstliche Intelligenz (AI / LLM)"])
     
+    industry = criteria.get("search", {}).get("industry", "IT")
+    experience_years = candidate_profile.get("experience_years", 25)
+    career_context_map = {
+        "IT": f'- IT-Erfahrung: Relevanter IT-Werdegang begann im Jahr {career_start_year}. Formuliere seine Erfahrung präzise und übertreibe nicht (nicht \"30 Jahre IT-Erfahrung\" schreiben, da dies irreführend ist; er war zuvor Industriemechaniker).',
+        "Handwerk": f'- Berufserfahrung: Der Kandidat verfügt über langjährige Erfahrung im Handwerk (Industriemechanik, Montage, Instandhaltung) sowie neuere IT-Kenntnisse aus Weiterbildungen. Formuliere seine Erfahrung präzise und wahrheitsgemäß.',
+        "Allgemein": f'- Berufserfahrung: Der Kandidat verfügt über ca. {experience_years} Jahre Berufserfahrung. Stelle seine Erfahrung je nach Stellenprofil dar.'
+    }
+    career_context = career_context_map.get(industry, career_context_map["IT"])
+    industry_skills_context_map = {
+        "IT": f"- Der Wert \"experience_years\" (ca. 30 Jahre) bezieht sich auf die gesamte berufliche Laufbahn (inkl. früherer technischer Berufe wie Industriemechaniker). Seine IT-Erfahrung (Netzwerke, Linux-Administration) begann als Freelancer ab {career_start_year} (bzw. intensiviert durch aktuelle Weiterbildungen ab 2025). Stelle seine IT-Erfahrung wahrheitsgemäß dar (z.B. \"mit meiner langjährigen Erfahrung in der Web-Systemadministration seit {career_start_year}...\" oder \"als angehender IT-Administrator...\"). Behaupte auf keinen Fall, dass er 30 Jahre IT-Erfahrung hat!",
+        "Handwerk": f"- Der Wert \"experience_years\" (ca. 30 Jahre) umfasst sowohl langjährige Tätigkeit im Handwerk (Industriemechanik, Montage) als auch neuere IT-Weiterbildungen. Stelle die relevante Erfahrung je nach Stellenprofil dar und übertreibe nicht.",
+        "Allgemein": f"- Der Wert \"experience_years\" (ca. 30 Jahre) umfasst die gesamte berufliche Laufbahn. Orientiere dich bei der Darstellung an den Anforderungen der Stelle."
+    }
+    industry_skills_context = industry_skills_context_map.get(industry, industry_skills_context_map["IT"])
+    
     salary_exp = config["defaults"].get("salary_expectation", "nach Vereinbarung")
     availability = config["defaults"].get("availability", "sofort")
     candidate_german = config["criteria"].get("german_level", "B1")
@@ -1407,7 +1446,9 @@ def generate_anschreiben(candidate_profile, job_description, config, criteria=No
         availability=availability,
         candidate_german=candidate_german,
         career_start_year=career_start_year,
-        mandatory_skills=", ".join(mandatory_skills)
+        mandatory_skills=", ".join(mandatory_skills),
+        career_context=career_context,
+        industry_skills_context=industry_skills_context
     )
     response = llm_request_with_fallback(prompt)
     if response is None:
@@ -2634,7 +2675,7 @@ def main():
                 
                 # Combine all links without duplicates
                 all_links = list(set(indeed_links + linkedin_links))
-                MAX_LINKS = 25
+                MAX_LINKS = int(criteria.get("search", {}).get("max_results", 25))
                 if len(all_links) > MAX_LINKS:
                     print(f"{Colors.YELLOW}Limiting to first {MAX_LINKS} links.{Colors.END}")
                     all_links = all_links[:MAX_LINKS]

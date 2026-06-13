@@ -1,3 +1,7 @@
+search:
+  industry: "IT"
+  max_results: 25
+
 cover_letter:
   career_start_year: 2010
   mandatory_skills:
