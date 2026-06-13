@@ -32,6 +32,10 @@ config.yaml
 **/config.yaml
 candidate_profile.json
 **/candidate_profile.json
+job_criteria.yaml
+**/job_criteria.yaml
+prompts.yaml
+**/prompts.yaml
 .env
 
 # All PDF files (CV, Anschreiben, certificates — contain personal data)
@@ -62,3 +66,23 @@ Anschreiben*.pdf
 
 # Distribution archive
 Gemini-JobAgent-dist.zip
+
+# ============================================================
+# PUBLIC-REPO BLOCK — Files with personal/internal data
+# ============================================================
+
+# Internal instruction files (all .md except public README)
+*.md
+!README.md
+!/README.md
+!src/README.md
+!/src/README.md
+
+# Test files used during development (not part of the core app)
+src/mock_jobs.py
+src/test_genai.py
+src/test_invalid.py
+src/test_job.py
+src/test_pw.py
+src/patch_llm.py
+src/check_secrets.py.sample

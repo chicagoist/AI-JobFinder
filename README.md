@@ -4,6 +4,23 @@ Automated job application agent for the German-speaking job market. Scrapes job 
 
 ---
 
+## 🚀 Open Source — Fork & Improve
+
+**This project lives from the community!**  
+Whether you are an experienced Python developer, an AI enthusiast, or just someone who wants to automate the job application process — **you are warmly invited to fork this repository, improve it, or extend it**.
+
+My roadmap includes:
+- ➕ **New job platforms** — StepStone, Xing, Monster, Glassdoor
+- ➕ **New LLM providers** — Claude, local models via Ollama
+- ➕ **Headless CI/CD integration** — fully automated pipeline
+- ➕ **Docker containerization** — one-command setup
+- ➕ **Web UI / Dashboard** — track applications visually
+
+→ **Fork the repository**, create a Pull Request, or open an Issue.  
+→ **Every contribution counts** — be it a new module, a bug fix, or better documentation.
+
+---
+
 ## Table of Contents
 
 - [How It Works](#how-it-works)
