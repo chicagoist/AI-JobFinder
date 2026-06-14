@@ -45,6 +45,16 @@ My roadmap includes:
 </p>
 
 ---
+<p align="left">
+  <a href="https://github.com/chicagoist/Job-Matcher-AI/">
+    <img src="https://img.shields.io/badge/Github-🧩_Job_Matcher_AI-FF7139?style=for-the-badge&logo=github&logoColor=white"
+         alt="GitHub Job Matcher AI for Firefox"
+         width="320">
+  </a>
+  <br>
+</p>
+
+---
 
 ## Table of Contents
 
