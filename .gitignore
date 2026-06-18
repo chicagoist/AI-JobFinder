@@ -1,12 +1,16 @@
+# Codebuff internal directories (forbidden on GitHub)
+.agents/
+.opencode/
+src/.agents/
+
 # Python caches
 __pycache__/
 *.pyc
 
 # Local chrome/playwright profiles
 temp_profile/
-temp_profile_test/
-temp_profile_test2/
-temp_profile_test3/
+temp_profile_test*/
+temp_profile_test*.*/
 browser-profile/
 src/chrome_data/
 src/chrome_data_Debug/
