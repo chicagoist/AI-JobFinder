@@ -2727,6 +2727,7 @@ def main():
                             if any(kw in estr.lower() for kw in ["epipe", "target page, context or browser has been closed", "connection", "browser has been closed", "protocol error", "socket"]):
                                 print(f"{Colors.RED}{Colors.BOLD}Browser connection lost. Remaining jobs will be skipped.{Colors.END}")
                                 browser_dead = True
+                                break
             
             # Close browser context only if we launched it (not CDP)
             if not cdp_connected:
