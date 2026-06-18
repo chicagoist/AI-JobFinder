@@ -4,6 +4,27 @@
 
 Python CLI tool that automates German job applications: searches Indeed/LinkedIn, scores jobs against a candidate profile via LLM, generates German cover letters (Anschreiben) in DIN 5008 format, fills web forms or sends direct emails.
 
+## Email Requirements (HARD — DO NOT BREAK)
+
+Two email paths exist; each has strict content requirements:
+
+### 1. Candidate Email (Batch `--send-email` / CC copy)
+- **Body:** Full terminal output for that specific vacancy (cleaned of ANSI codes). Not a brief summary — the complete `TeeStdout` log captured during `process_job_url`.
+- **Attachments (direct PDFs, not ZIP):**
+  - `Anschreiben_<Company>.pdf` — the generated cover letter PDF
+  - `Lebenslauf.pdf` — newest CV from `candidate_files` table (classification `Lebenslauf`, ordered by `mtime DESC LIMIT 1`)
+  - **All** Zertifikat / Diplom / Zeugnis / Arbeitszeugnis PDFs from `candidate_files` table — unconditionally, without keyword filtering. These are documents that influenced the LLM scoring decision.
+
+### 2. Recruiter Email (Direct `send_direct_email`)
+- **Body:** The full Anschreiben (cover letter) text — including Betreffzeile, Anrede, body, and Grußformel.
+- **Attachments:** Same as candidate email — `Anschreiben_<Company>.pdf` + `Lebenslauf.pdf` + all Zertifikat/Diplom/Zeugnis/Arbeitszeugnis PDFs from `candidate_files`.
+
+### Implementation
+- **Candidate path:** `email_sender.py` → `send_pending_emails()` — body = `clean_ansi_escape_codes(terminal_output)`, attachments queried from `candidate_files` table.
+- **Recruiter path:** `direct_email_applier.py` → `send_direct_email()` + `collect_relevant_attachments()` — body = `anschreiben_text`, attachments include all candidate documents unconditionally.
+
+**NEVER remove or weaken these requirements.** They are the core purpose of this application.
+
 ## Architecture
 
 - **Entrypoint**: `src/agent.py` (~2855 lines) — CLI parser + browser orchestration + document pipeline

@@ -4,6 +4,28 @@
 
 A Python-based CLI job-application automation agent targeting the German job market. It uses Playwright to browse Indeed/LinkedIn, scores job descriptions against a candidate profile via LLM (Gemini / OpenRouter), generates German cover letters (Anschreiben) in DIN 5008 format, and attempts to fill web forms or send direct emails.
 
+## Email Requirements (HARD — DO NOT BREAK)
+
+These are the strict email requirements — the core purpose of this application.
+
+### Candidate Email (`--send-email` batch / CC copy)
+When the agent sends a summary email to the candidate:
+- **Body:** The full terminal output (`TeeStdout`) captured during `process_job_url` for that specific vacancy — cleaned of ANSI codes. The complete log, not a brief summary.
+- **Subject:** `"Bewerbung: {job_title} bei {company_name}"`
+- **Attachments (direct PDF files, not ZIP):**
+  1. `Anschreiben_<Company>.pdf` — generated cover letter
+  2. `Lebenslauf.pdf` — newest CV from `candidate_files` (`ORDER BY mtime DESC LIMIT 1`)
+  3. **All** Zertifikat / Diplom / Zeugnis / Arbeitszeugnis PDFs from `candidate_files` — unconditionally (no keyword filter). These documents influenced the LLM scoring.
+- **Implementation:** `email_sender.py` → `send_pending_emails()`
+
+### Recruiter Email (`send_direct_email`)
+When the agent sends a direct application to a recruiter/employer:
+- **Body:** The full Anschreiben (cover letter) text — Betreffzeile + Anrede + body + Grußformel.
+- **Subject:** `"Bewerbung: {job_title} bei {company_name}"`
+- **Attachments:** Same set as candidate email — CV + Anschreiben PDF + all score-influencing documents.
+- **CC to candidate:** The agent sends a `[KOPIE]` copy to the candidate's own email with job metadata + the Anschreiben.
+- **Implementation:** `direct_email_applier.py` → `send_direct_email()` + `collect_relevant_attachments()`
+
 ## Key Directories & Files
 
 - **`agent.py`** — Main entry point (~2700 lines). Contains browser orchestration, job search, scoring, cover-letter generation, form filling, the Tkinter configuration GUI, and the CLI argument parser.
