@@ -38,6 +38,10 @@ gemini:
 llm:
   priority: "gemini"       # "gemini" or "openrouter" — primary LLM; falls back to other on failure
 
+openrouter:
+  api_key: "<YOUR_OPENROUTER_API_KEY>"   # sk-or-v1-... — also read from env OPENROUTER_API_KEY
+  model: "openai/gpt-oss-120b:free"        # free model; see https://openrouter.ai/models
+
 smtp:
   host: "smtp.gmail.com"
   port: 587
