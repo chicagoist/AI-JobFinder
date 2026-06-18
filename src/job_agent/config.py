@@ -87,16 +87,18 @@ Zusätzliche Vorgaben:
 - Pflichtkompetenzen: {mandatory_skills}.
 
 Format (DIN 5008):
-1. Absender (Kandidat).
-2. Empfänger (Unternehmen).
-3. Datum (rechtsbündig).
-4. Betreffzeile (fett).
-5. Anrede.
-6. Brieftext (Einleitung, Motivation, Kompetenzen, Gehalt, Schluss).
-7. Grußformel.
-8. Unterschrift.
+1. Betreffzeile (fett): "Bewerbung als [Position]" — mit konkreter Position aus der Stellenbeschreibung.
+2. Anrede: "Sehr geehrte Damen und Herren," oder personalisiert falls Ansprechpartner bekannt.
+3. Brieftext (body): Einleitung, Motivation, Kompetenzen, Gehaltsvorstellung, Verfügbarkeit, Schlusssatz.
+4. Grußformel (closing): "Mit freundlichen Grüßen".
 
-Gib NUR den Text des Anschreibens aus.""",
+Antworte NUR mit folgendem JSON-Objekt (kein Markdown, kein ```json):
+{{
+  "subject": "Bewerbung als Cloud Engineer",
+  "salutation": "Sehr geehrte Damen und Herren,",
+  "body": "Der vollständige Haupttext des Anschreibens (ohne Betreff, ohne Anrede, ohne Grußformel).\n\nMehrere Absätze durch Leerzeile getrennt.",
+  "closing": "Mit freundlichen Grüßen"
+}}""",
     "form_filler_prompt": """Du bist ein Assistent, der ein Webformular für eine Bewerbung ausfüllt. Analysiere die Liste der interaktiven Elemente (Inputs, Buttons, Uploads) und entscheide für jedes Element, welche Aktion auszuführen ist.
 Kandidatenprofil:
 {candidate_profile}
@@ -147,7 +149,81 @@ Der E-Mail-Kontakt für Bewerbungen ist: {email}
 Stellenbeschreibung:
 {job_text}
 
-Gib NUR den Namen zurück (z.B. "Max Mustermann"). Wenn kein Name gefunden wird, gib eine leere Zeile zurück."""
+Gib NUR den Namen zurück (z.B. "Max Mustermann"). Wenn kein Name gefunden wird, gib eine leere Zeile zurück.""",
+    "job_intake_prompt": """Du bist ein Job-Intake-Analyst. Analysiere eine Stellenanzeige VOLLSTÄNDIG und extrahiere alle Metadaten, prüfe Ausschlusskriterien und erkenne die Branche.
+
+== SEITENTITEL ==
+{page_title}
+
+== SEITENINHALT (Anfang) ==
+{page_text}
+
+== URL ==
+{url}
+
+== KANDIDATENPROFIL ==
+{candidate_profile}
+
+== AUSSCHLUSSKRITERIEN (KO-Filter) ==
+- Gesperrte Unternehmen: {excluded_companies}
+- Verbotene Jobtitel (statisch): {forbidden_titles}
+- Verbotene Keywords (Sicherheitsfreigaben): {clearance_keywords}
+- Pflichtzertifikate: {mandatory_certifications}
+- Spam-Bildungsanbieter: {spam_keywords}
+- Datacenter-Keywords: {datacenter_keywords}
+- Min. Gehalt: {min_salary} EUR
+- Sprachniveau Deutsch: {candidate_german}, Englisch: {candidate_english}
+
+== BEREITS BEWORBEN (zur Duplikaterkennung) ==
+{previous_applications}
+
+AUFGABEN:
+1. Prüfe, ob es sich um eine gültige Stellenanzeige handelt (kein Dead-Link, keine Suchseite, keine 404-Seite).
+2. Extrahiere Firmenname und Jobtitel aus Titel + Text. Bereinige den Firmennamen (entferne GmbH, AG, SE, KG, e.V. etc.).
+3. Bestimme die Branche (IT, Handwerk, Allgemein) anhand des Textes UND des Kandidatenprofils.
+4. Prüfe, ob der Jobtitel gegen die forbidden_titles-Regeln oder das Senioritätslevel des Kandidaten verstösst:
+   - Kandidat mit IT-Junior-Level (0-3 Jahre): Blockiere Senior, Middle, Lead, Architect, Principal, Head of, Full Stack Developer, Consultant, Helpdesk.
+   - Kandidat mit Handwerk-Expert-Level: Erlaube alle Handwerk-Titel.
+   - Global blockieren: Projektmanager, Sales, Marketing Manager, HR.
+5. Prüfe auf Duplikate mit bereits beworbenen Stellen.
+6. Prüfe KO-Filter: Unternehmen auf Blacklist, Sicherheitsfreigaben, Spam-Bildungsanbieter.
+
+Antworte NUR mit diesem JSON-Objekt (kein Markdown):
+{{
+  "is_valid_job": true,
+  "invalid_reason": null,
+  "company_name": "Bereinigter Firmenname (ohne GmbH, AG, etc.)",
+  "job_title": "Berufsbezeichnung",
+  "industry": "IT",
+  "industry_reasoning": "Kurze Begründung für Branchenwahl",
+  "forbidden_title_detected": false,
+  "forbidden_title_reason": null,
+  "is_duplicate": false,
+  "duplicate_of": null,
+  "ko_triggered": false,
+  "ko_reason": null
+}}""",
+
+    "classify_document_prompt": """Klassifiziere das folgende Dokument anhand von Dateiname und Textinhalt.
+
+Dateiname: {filename}
+Erste 1500 Zeichen des Textes:
+{doc_text}
+
+Kategorien:
+- "Lebenslauf": CV, Curriculum Vitae, Werdegang, mit persönlichen Daten und Berufserfahrung
+- "Anschreiben": Bewerbungsschreiben, Motivationsschreiben, Cover Letter
+- "Arbeitszeugnis": Arbeitsbescheinigung, Beurteilung vom Arbeitgeber
+- "Zertifikat": Fortbildungsnachweis, Teilnahmebestätigung, Certificate
+- "Diplom": Abschlusszeugnis, Universitätsdiplom, Bachelor/Master-Urkunde, Schulzeugnis, Transcript
+- "Sonstiges": Dokumente, die in keine andere Kategorie passen
+
+Antworte NUR mit einem JSON-Objekt (kein Markdown):
+{{
+  "classification": "Lebenslauf",
+  "confidence": 0.95,
+  "reasoning": "Kurze Begründung"
+}}""",
 }
 
 # Recreate missing active config files from their .sample templates

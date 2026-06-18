@@ -9,6 +9,7 @@ import urllib.request
 import urllib.parse
 import re
 import warnings
+import time
 
 # Import common utilities and configuration loaders from the package
 import job_agent.utils
@@ -20,6 +21,16 @@ from playwright.sync_api import sync_playwright
 
 # API Keys and client configuration are managed in job_agent/llm.py
 GEMINI_MODEL = "gemini-2.5-flash"
+
+# Debug mode — enabled via --debug CLI flag
+DEBUG = False
+def debug_print(*args, **kwargs):
+    """Print timestamped debug messages when DEBUG is True. Pass prefix='...' to label the subsystem."""
+    if not DEBUG:
+        return
+    prefix = kwargs.pop("prefix", "DEBUG")
+    ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+    print(f"{Colors.GREY}[{prefix} {ts}]{Colors.END}", *args, **kwargs)
 
 def run_config_gui(config_path, criteria_path, profile_path, prompts_path):
     print(f"{Colors.CYAN}Launching Configuration GUI...{Colors.END}")
@@ -299,7 +310,9 @@ def run_config_gui(config_path, criteria_path, profile_path, prompts_path):
     notebook.add(tab3, text="Prompts Editor")
     
     ttk.Label(tab3, text="Select Prompt to Edit:", font=('Segoe UI', 9, 'bold')).pack(anchor="w", padx=10, pady=5)
-    prompt_keys = ["scoring_prompt", "cover_letter_prompt", "form_filler_prompt", "classification_prompt"]
+    prompt_keys = ["scoring_prompt", "scoring_prompt_IT", "cover_letter_prompt", "form_filler_prompt",
+                   "classification_prompt", "classify_document_prompt",
+                   "job_intake_prompt", "extract_recruiter_prompt"]
     prompt_combo = ttk.Combobox(tab3, values=prompt_keys, state="readonly", width=30)
     prompt_combo.set("scoring_prompt")
     prompt_combo.pack(anchor="w", padx=10, pady=5)
@@ -927,44 +940,41 @@ def index_candidate_files(workspace_dir, conn, criteria_path=None):
         except Exception as e:
             print(f"   Warning: could not read text from {f}: {e}")
             
-        # Classify document using filename first to save LLM API quota and ensure high accuracy
+        # Classify document using LLM — with filename fast-path for obvious names
         classification = "Sonstiges"
         filename_lower = os.path.basename(f).lower()
         
-        if "lebenslauf" in filename_lower or "cv" in filename_lower or "curriculum" in filename_lower:
+        # Fast-path: use filename for obvious cases (free, instant)
+        if "lebenslauf" in filename_lower or "cv" in filename_lower:
             classification = "Lebenslauf"
-        elif "anschreiben" in filename_lower or "cover_letter" in filename_lower or "coverletter" in filename_lower:
+        elif "anschreiben" in filename_lower or "cover_letter" in filename_lower:
             classification = "Anschreiben"
-        elif "zertifikat" in filename_lower or "certificate" in filename_lower or "bescheinigung" in filename_lower:
+        elif "zertifikat" in filename_lower or "certificate" in filename_lower:
             classification = "Zertifikat"
-        elif "zeugnis" in filename_lower or "diplom" in filename_lower or "diploma" in filename_lower or "degree" in filename_lower:
+        elif "zeugnis" in filename_lower or "diplom" in filename_lower or "degree" in filename_lower:
             classification = "Diplom"
         
-        # If filename is not decisive, check document text keywords
+        # For ambiguous filenames or if we have text, use LLM
         if classification == "Sonstiges" and doc_text:
-            text_lower = doc_text.lower()
-            if any(kw in text_lower for kw in ["lebenslauf", "cv", "curriculum vitae", "personal details", "berufserfahrung", "professional experience", "werdegang", "beruflicher werdegang"]):
-                classification = "Lebenslauf"
-            elif any(kw in text_lower for kw in ["anschreiben", "bewerbungsschreiben", "sehr geehrte", "bewerbung um", "motivational letter", "cover letter"]):
-                classification = "Anschreiben"
-            elif any(kw in text_lower for kw in ["zertifikat", "certificate", "bescheinigung", "erfolgreich teilgenommen", "fortbildung", "qualification"]):
-                classification = "Zertifikat"
-            elif any(kw in text_lower for kw in ["diplom", "zeugnis", "urkunde", "bachelor", "master", "hochschulabschluss", "schulzeugnis"]):
-                classification = "Diplom"
-            
-            # Fallback to Gemini if it could not be determined locally
-            if classification == "Sonstiges":
-                init_gemini()
-                prompt = PROMPTS.get("classification_prompt").format(doc_text=doc_text)
-                try:
-                    resp = llm_request_with_fallback(prompt)
-                    resp_text = resp.text.strip().replace("\"", "").replace("'", "")
-                    for cat in ["Lebenslauf", "Anschreiben", "Zertifikat", "Diplom", "Sonstiges"]:
-                        if cat.lower() in resp_text.lower():
-                            classification = cat
-                            break
-                except Exception as e:
-                    print(f"   Warning: Gemini classification failed for {f}: {e}. Defaulting to 'Sonstiges'.")
+            init_gemini()
+            prompt = PROMPTS.get("classify_document_prompt").format(
+                filename=os.path.basename(f),
+                doc_text=doc_text[:1500]
+            )
+            try:
+                resp = llm_request_with_fallback(prompt)
+                if resp:
+                    resp_text = resp.text.strip()
+                    if resp_text.startswith("```json"): resp_text = resp_text[7:]
+                    if resp_text.startswith("```"): resp_text = resp_text[3:]
+                    if resp_text.endswith("```"): resp_text = resp_text[:-3]
+                    result = json.loads(clean_and_repair_json(resp_text.strip()))
+                    classification = result.get("classification", "Sonstiges")
+                    conf = result.get("confidence", 0)
+                    reason = result.get("reasoning", "")
+                    print(f"   {Colors.GREY}LLM classified:{Colors.END} {classification} (confidence: {conf:.0%}) — {reason}")
+            except Exception as e:
+                print(f"   {Colors.YELLOW}Warning: LLM classification failed for {f}: {e}. Defaulting to 'Sonstiges'.{Colors.END}")
         
         print(f"   Classified as: {Colors.YELLOW}{Colors.BOLD}{classification}{Colors.END}")
         
@@ -1209,198 +1219,67 @@ cover_letter:
             
     print(f"{Colors.GREEN}{Colors.BOLD}Workspace reset completed successfully.{Colors.END}\n")
 
-def compute_forbidden_titles(candidate_profile):
+# Unified LLM-based job intake: validates job, extracts metadata, detects industry,
+# checks forbidden titles, KO filters, and duplicates — all in one prompt.
+def job_intake_check(page_title, job_text, url, candidate_profile, criteria, conn):
     """
-    Динамически генерирует список forbidden_titles на основе профиля кандидата.
-    Учитывает уровень (Seniority) для КАЖДОГО направления деятельности отдельно,
-    а НЕ общий стаж.
-
-    Для IT-направления (Junior): блокирует Senior/Middle/Lead/Architect роли.
-    Для Handwerk-направления (Experienced/Senior): разрешает все уровни.
+    Replaces: detect_industry(), compute_forbidden_titles(), check_local_ko_filters(),
+    rule-based metadata extraction, and dead-link keyword lists.
+    Uses job_intake_prompt to get a structured JSON with all intake decisions.
     """
-    forbidden = set()
+    init_gemini()
+    # Load KO filter data from criteria for the prompt
+    ko = criteria.get("ko_filters", {})
+    excluded_companies = ", ".join(ko.get("companies_blacklist", []))
+    forbidden_titles = ", ".join(ko.get("forbidden_titles", []))
+    clearance_keywords = ", ".join(ko.get("clearances", {}).get("forbidden_keywords", []))
+    mandatory_certifications = ", ".join(ko.get("certifications", {}).get("mandatory_if_specified", []))
+    spam_keywords = ", ".join(ko.get("spam_providers", {}).get("blocked_keywords", []))
+    datacenter_keywords = ", ".join(ko.get("datacenter_physical_work", {}).get("keywords", []))
+    min_salary = ko.get("salary", {}).get("min_annual_eur", 36000)
+    candidate_german = ko.get("languages", {}).get("min_required_german", "B1")
+    candidate_english = ko.get("languages", {}).get("min_required_english", "A2")
 
-    hr = candidate_profile.get("hr_assessment", {})
-    directions = hr.get("job_search_directions", [])
+    # Get recent applications for duplicate checking
+    cursor = conn.cursor()
+    cursor.execute("SELECT company_name, job_title FROM applied_jobs ORDER BY id DESC LIMIT 30")
+    previous_applications = "\n".join([f"- {r[0]} | {r[1]}" for r in cursor.fetchall()])
+    if not previous_applications:
+        previous_applications = "Keine bisherigen Bewerbungen"
 
-    # Определяем направления и их уровень
-    # IT: Junior (карьерный переход ~2024, 2 года опыта)
-    # Handwerk: Senior/Expert (33+ года, с 1992)
-    has_it_direction = any(kw in d.lower() for d in directions for kw in ["it", "system", "cloud", "admin"])
-    has_handwerk_direction = any(kw in d.lower() for d in directions for kw in ["montage", "mechanisch", "handwerk", "fertigung", "instandhaltung"])
-
-    # Выводим информацию об определённых уровнях
-    levels = []
-    if has_it_direction:
-        levels.append("IT: Junior (Entry Level)")
-    if has_handwerk_direction:
-        levels.append("Handwerk: Experienced/Senior")
-    if not levels:
-        levels.append("Global (no specific direction detected)")
-    print(f"{Colors.CYAN}[Profile] Seniority by direction: {', '.join(levels)}{Colors.END}")
-
-    # ---- IT-направление: Junior/Entry Level ----
-    if has_it_direction:
-        # Блокируем Senior-IT-роли (неподходящий уровень)
-        forbidden.add("Senior")
-        forbidden.add("Middle")
-        forbidden.add("Lead")
-        forbidden.add("Principal")
-        forbidden.add("Architect")
-        forbidden.add("Head of")
-
-        # Блокируем роли, не соответствующие профилю
-        forbidden.add("Full Stack Developer")
-        forbidden.add("Fullstack Developer")
-        forbidden.add("Consultant")
-        forbidden.add("Helpdesk")
-        forbidden.add("Help desk")
-        forbidden.add("Produktspezialist")
-
-    # ---- Handwerk-направление: Experienced/Senior ----
-    # НЕ блокируем Handwerk-роли — кандидат опытный специалист
-    # Разрешены: Schlosser, Monteur, Instandhaltung, Industriemechaniker и т.д.
-
-    # ---- Глобальные блокировки (независимо от направления) ----
-    forbidden.add("Projektmanager")
-    forbidden.add("Sales")
-    forbidden.add("Marketing Manager")
-    forbidden.add("HR")
-
-    # Удаляем пустые строки и возвращаем отсортированный список
-    result = sorted([t for t in forbidden if t.strip()])
-    return result
-
-# Recreate missing active config files from their .sample templates
-def check_local_ko_filters(job_text, criteria, candidate_profile):
-    """
-    Scans the job text locally using regular expressions and keyword matching to identify obvious K.O. criteria.
-    Returns a string detailing the triggered rule, or None if no K.O. criteria are met.
-    """
-    if not job_text:
-        return None
-        
-    import re
-    text_lower = job_text.lower()
-    
-    # 1. Security clearances & citizenship requirements
-    clearance_words = criteria.get("ko_filters", {}).get("clearances", {}).get("forbidden_keywords", [])
-    if clearance_words:
-        for word in clearance_words:
-            word_lower = word.lower()
-            if word_lower in text_lower:
-                return f"Forbidden clearance/citizenship keyword detected: '{word}'"
-
-    # 2. Datacenter physical labor requirements
-    dc_filters = criteria.get("ko_filters", {}).get("datacenter_physical_work", {})
-    if dc_filters.get("forbidden", False):
-        dc_keywords = dc_filters.get("keywords", [])
-        for kw in dc_keywords:
-            kw_lower = kw.lower()
-            if kw_lower in text_lower:
-                return f"Datacenter physical labor keyword detected: '{kw}'"
-
-    # 3. Blocked educational/training providers (spam)
-    spam_filters = criteria.get("ko_filters", {}).get("spam_providers", {})
-    blocked_keywords = spam_filters.get("blocked_keywords", [])
-    if blocked_keywords:
-        for provider in blocked_keywords:
-            provider_lower = provider.lower()
-            pattern = r'\b' + re.escape(provider_lower) + r'\b'
-            if re.search(pattern, text_lower):
-                # Check if this is an internship/praxis, which might be allowed
-                is_internship = any(term in text_lower for term in ["praktikum", "internship", "praxissemester", "trainee"])
-                if is_internship and spam_filters.get("allow_internship", True):
-                    continue
-                return f"Blocked training provider detected: '{provider}'"
-
-    # 4. Mandatory certifications candidate doesn't have
-    cert_filters = criteria.get("ko_filters", {}).get("certifications", {})
-    mandatory_certs = cert_filters.get("mandatory_if_specified", [])
-    if mandatory_certs:
-        candidate_certs = [c.lower() for c in candidate_profile.get("certifications", [])]
-        for cert in mandatory_certs:
-            cert_lower = cert.lower()
-            cert_pattern = r'\b' + re.escape(cert_lower) + r'\b'
-            if re.search(cert_pattern, text_lower):
-                has_it = False
-                for c_cert in candidate_certs:
-                    if cert_lower in c_cert:
-                        has_it = True
-                        break
-                if not has_it:
-                    return f"Job requires mandatory certification '{cert}' which is missing in candidate profile"
-
-    return None
-
-def detect_industry(job_title, job_description, candidate_profile=None):
-    text = (f"{job_title or ''} {job_description or ''}").lower()
-
-    it_keywords = [
-        "python", "java", "devops", "kubernetes", "docker", "aws", "azure",
-        "cloud", "ci/cd", "linux", "server", "cybersecurity", "software",
-        "full.?stack", "backend", "frontend", "api", "sql", "datenbank",
-        "entwickler", "developer", "administrator", "admin\\b", "netzwerk", "systemadmin",
-        "systemintegrator", "fachinformatiker", "informatiker", "informatik",
-        "softwareentwickler", "programmierer", "anwendungsbetreuer",
-        "data.?science", "machine.?learning", "cloud.?engineer", "devops.?engineer",
-        "\\bit\\b", "it-support", "it-sicherheit", "it-spezialist", "it-servicedesk",
-        "system.?engineer", "software.?engineer", "service.?desk",
-        "exchange", "windows", "microsoft", "vmware", "help.?desk", "ticket",
-        "powershell", "script", "automation", "firewall", "router", "switch",
-        "active.?directory", "sap", "oracle",
-    ]
-    handwerk_keywords = [
-        "schlosser", "elektriker", "elektroniker", "shk", "sanitär",
-        "heizung", "klima", "wärmepumpe", "dachdecker", "zimmerer",
-        "maurer", "metallbauer", "tischler", "schreiner",
-        "maler", "lackierer", "kfz", "mechatroniker", "cnc",
-        "schweißen", "pv-anlage", "photovoltaik", "energietechnik",
-        "handwerk", "reparatur", "wartung", "installation",
-        "anlagenmechaniker", "gebäude", "montage",
-        "galvanik", "galvanisieren", "beschichtung", "oberflächentechnik",
-        "metallverarbeitung", "produktion", "fertigung", "werkzeug",
-        "maschinenbau", "industriemechaniker", "feinwerk",
-        "sicherheitstechnik", "steuerungstechnik", "automatisierungstechnik",
-        "elektro", "lüftung", "brandschutz", "servicetechniker",
-    ]
-    allgemein_keywords = [
-        "lehrer", "erzieher", "dozent", "trainer", "ausbilder",
-        "pädagoge", "sozial", "büro", "verwaltung", "assistent",
-        "sekretär", "buchhaltung", "personal", "hr\\b", "recruiting",
-        "vertrieb", "kundenberater", "marketing", "einkauf",
-        "lager", "logistik", "fahrer", "reinigung", "hauswirtschaft",
-        "küche", "kundenservice", "servicekraft", "servicepersonal", "dienstleistung", "beratung", "management.?assistant",
-        "pflege", "krankenpflege", "arzt", "therapeut",
-        "kinder", "betreuung", "childcare",
-    ]
-
-    def count_matches(keywords, search_text=None):
-        src = search_text if search_text is not None else text
-        return sum(1 for kw in keywords if re.search(kw, src, re.IGNORECASE))
-
-    it_score = count_matches(it_keywords)
-    handwerk_score = count_matches(handwerk_keywords)
-    allgemein_score = count_matches(allgemein_keywords)
-
-    scores = {"IT": it_score, "Handwerk": handwerk_score, "Allgemein": allgemein_score}
-    sorted_scores = sorted(scores.items(), key=lambda x: -x[1])
-    best = sorted_scores[0]
-
-    if best[1] >= 2 and best[1] >= sorted_scores[1][1] + 2:
-        return best[0]
-
-    if best[1] == 0 and candidate_profile:
-        cv_text_lower = str(candidate_profile).lower()
-        cv_it = count_matches(it_keywords, cv_text_lower)
-        cv_handwerk = count_matches(handwerk_keywords, cv_text_lower)
-        cv_allgemein = count_matches(allgemein_keywords, cv_text_lower)
-        cv_scores = {"IT": cv_it, "Handwerk": cv_handwerk, "Allgemein": cv_allgemein}
-        cv_best = sorted(cv_scores.items(), key=lambda x: -x[1])[0]
-        if cv_best[1] >= 2:
-            return cv_best[0]
-
-    return "Allgemein"
+    prompt = PROMPTS.get("job_intake_prompt").format(
+        page_title=page_title,
+        page_text=job_text[:3000] if job_text else "",
+        url=url,
+        candidate_profile=json.dumps(candidate_profile, ensure_ascii=False, indent=2),
+        excluded_companies=excluded_companies or "Keine",
+        forbidden_titles=forbidden_titles or "Keine",
+        clearance_keywords=clearance_keywords or "Keine",
+        mandatory_certifications=mandatory_certifications or "Keine",
+        spam_keywords=spam_keywords or "Keine",
+        datacenter_keywords=datacenter_keywords or "Keine",
+        min_salary=min_salary,
+        candidate_german=candidate_german,
+        candidate_english=candidate_english,
+        previous_applications=previous_applications
+    )
+    try:
+        t0 = time.time()  # DEBUG: LLM timing
+        response = llm_request_with_fallback(prompt)
+        if response is None:
+            return {"is_valid_job": True, "company_name": "Unbekannt", "job_title": "Unbekannt",
+                    "industry": "Allgemein", "forbidden_title_detected": False,
+                    "is_duplicate": False, "ko_triggered": False}
+        text = clean_and_repair_json(response.text)
+        result = json.loads(text)
+        debug_print(f"job_intake_check done in {time.time()-t0:.1f}s", prefix="INTAKE")
+        return result
+    except Exception as e:
+        debug_print(f"job_intake_check FAILED: {e}", prefix="INTAKE")
+        print(f"{Colors.YELLOW}Warning: job_intake LLM call failed: {e}. Falling back to allow.{Colors.END}")
+        return {"is_valid_job": True, "company_name": "Unbekannt", "job_title": "Unbekannt",
+                "industry": "Allgemein", "forbidden_title_detected": False,
+                "is_duplicate": False, "ko_triggered": False}
 
 # Score job description against the candidate profile
 def score_job(candidate_profile, job_description, config, criteria, past_rejections=None, industry="Allgemein", mandatory_skills=None):
@@ -1442,18 +1321,21 @@ def score_job(candidate_profile, job_description, config, criteria, past_rejecti
         datacenter_keywords=", ".join(datacenter_keywords),
         mandatory_skills=industry_skills_str
     )
+    t0 = time.time()  # DEBUG: LLM timing
     try:
         response = llm_request_with_fallback(prompt)
         if response is None:
             print(f"{Colors.RED}Warning: LLM returned None response. Skipping this job.{Colors.END}")
             return {"total_score": 0.0, "ko_criterion_triggered": True, "reasoning": "LLM returned None"}
         text = clean_and_repair_json(response.text)
+        debug_print(f"score_job done in {time.time()-t0:.1f}s", prefix="SCORE")
         result = json.loads(text)
         if not isinstance(result, dict):
             print(f"{Colors.RED}Warning: Scoring response is not a JSON object: {text[:200]}. Skipping this job.{Colors.END}")
             return {"total_score": 0.0, "ko_criterion_triggered": True, "reasoning": "Non-dict response"}
         return result
     except Exception as e:
+        debug_print(f"score_job FAILED: {e}", prefix="SCORE")
         print(f"{Colors.RED}Warning: Could not parse scoring JSON: {e}. Skipping this job.{Colors.END}")
         return {"total_score": 0.0, "ko_criterion_triggered": True, "reasoning": "JSON parse error"}
 
@@ -1489,13 +1371,31 @@ def generate_anschreiben(candidate_profile, job_description, config, criteria=No
         career_start_year=career_start_year,
         mandatory_skills=", ".join(mandatory_skills)
     )
+    t0 = time.time()  # DEBUG: LLM timing
     response = llm_request_with_fallback(prompt)
     if response is None:
         print(f"{Colors.RED}Warning: LLM returned None for cover letter generation. Returning empty.{Colors.END}")
-        return "Leider konnte kein Anschreiben generiert werden."
-    return response.text.strip()
+        return {"subject": "Bewerbung", "salutation": "Sehr geehrte Damen und Herren,",
+                "body": "Leider konnte kein Anschreiben generiert werden.",
+                "closing": "Mit freundlichen Grüßen",
+                "full_text": "Leider konnte kein Anschreiben generiert werden."}
+    debug_print(f"generate_anschreiben done in {time.time()-t0:.1f}s", prefix="ANSCHREIBEN")
+    raw_text = response.text.strip()
+    # Try to parse structured JSON from LLM
+    try:
+        data = json.loads(clean_and_repair_json(raw_text))
+        if isinstance(data, dict) and "body" in data:
+            full_text = f"{data.get('subject', 'Bewerbung')}\n\n{data.get('salutation', 'Sehr geehrte Damen und Herren,')}\n\n{data.get('body', '')}\n\n{data.get('closing', 'Mit freundlichen Grüßen')}"
+            data["full_text"] = full_text
+            return data
+    except Exception:
+        pass
+    # Fallback: treat as plain text
+    return {"subject": "Bewerbung", "salutation": "Sehr geehrte Damen und Herren,",
+            "body": "", "closing": "Mit freundlichen Grüßen", "full_text": raw_text}
 
 # Render Anschreiben text as a beautiful DIN 5008 PDF using Playwright
+# Accepts either a dict (from generate_anschreiben) or a plain string (backward compat)
 def save_anschreiben_pdf(anschreiben_text, company_name, candidate_profile, output_path, browser_context=None):
     print(f"{Colors.CYAN}Rendering Anschreiben PDF to '{output_path}'...{Colors.END}")
     pi = candidate_profile.get('personal_info', {})
@@ -1513,32 +1413,19 @@ def save_anschreiben_pdf(anschreiben_text, company_name, candidate_profile, outp
     sender_phone = pi.get('phone', '')
     date_str = datetime.date.today().strftime("%d.%m.%Y")
     
-    # Simple parser to separate Subject, Salutation, and Body
-    lines = [l.strip() for l in anschreiben_text.split("\n") if l.strip()]
-    subject = "Bewerbung"
-    salutation = "Sehr geehrte Damen und Herren,"
-    body_lines = []
-    
-    idx = 0
-    if idx < len(lines) and ("bewerbung" in lines[idx].lower() or lines[idx].startswith("**")):
-        subject = lines[idx].replace("**", "")
-        idx += 1
-        
-    if idx < len(lines) and "sehr geehrt" in lines[idx].lower():
-        salutation = lines[idx]
-        idx += 1
-        
-    # Strip LLM-generated closing (greeting + name) to avoid duplicate with hardcoded closing div
-    body_paragraphs = [p.strip() for p in "\n\n".join(lines[idx:]).split("\n\n") if p.strip()]
-    closing_keywords = ["mit freundlichen", "mit freundlichem", "freundliche grüße",
-                        "mit besten grüßen", "hochachtungsvoll", "beste grüße"]
-    while body_paragraphs:
-        last = body_paragraphs[-1].lower()
-        if any(kw in last for kw in closing_keywords) or sender_name.lower() in last:
-            body_paragraphs.pop()
-        else:
-            break
-    body_html = "".join([f"<p>{p}</p>" for p in body_paragraphs])
+    # Extract structured fields from dict (Phase 8) or fallback to plain text
+    if isinstance(anschreiben_text, dict):
+        subject = anschreiben_text.get("subject", "Bewerbung")
+        salutation = anschreiben_text.get("salutation", "Sehr geehrte Damen und Herren,")
+        raw_body = anschreiben_text.get("body", "")
+        body_html = "".join([f"<p>{p.strip()}</p>" for p in raw_body.split("\n") if p.strip()])
+        if not body_html:
+            body_html = "<p>" + anschreiben_text.get("full_text", "").replace("\n", "</p><p>") + "</p>"
+    else:
+        # Backward compat: plain string
+        subject = "Bewerbung"
+        salutation = "Sehr geehrte Damen und Herren,"
+        body_html = "<p>" + anschreiben_text.replace("\n", "</p><p>") + "</p>"
     
     html_content = f"""
     <!DOCTYPE html>
@@ -1643,7 +1530,7 @@ def save_anschreiben_pdf(anschreiben_text, company_name, candidate_profile, outp
             from playwright.sync_api import sync_playwright
             def _render_pdf():
                 with sync_playwright() as pw:
-                    browser = pw.chromium.launch(headless=True, args=["--no-sandbox"])
+                    browser = pw.chromium.launch(headless=True)
                     pdf_page = browser.new_page()
                     pdf_page.set_content(html_content)
                     pdf_page.pdf(path=output_path, format="A4")
@@ -1772,6 +1659,7 @@ def get_browser_context(playwright_instance, config, headless=False):
 
     # Try connecting to an existing debugging session first
     try:
+        debug_print("Attempting CDP connection on port 9222...", prefix="BROWSER")
         urllib.request.urlopen("http://127.0.0.1:9222/json/version", timeout=1)
         print(f"{Colors.GREEN}Found active browser session on port 9222. Connecting...{Colors.END}")
         browser = playwright_instance.chromium.connect_over_cdp("http://127.0.0.1:9222")
@@ -1798,7 +1686,7 @@ def get_browser_context(playwright_instance, config, headless=False):
     print(f"{Colors.CYAN}Launching persistent context: '{data_dir}' (Profile: '{profile}')...{Colors.END}")
     
     try:
-        # Attempt to launch the persistent context
+        debug_print("Launching persistent context...", prefix="BROWSER")
         context = playwright_instance.chromium.launch_persistent_context(
             user_data_dir=data_dir,
             channel=channel,
@@ -1830,7 +1718,17 @@ def get_browser_context(playwright_instance, config, headless=False):
         
         # Final fallback: temp profile in current directory
         print(f"{Colors.YELLOW}Falling back to temporary profile...{Colors.END}")
+        # Auto-clean stale Singleton locks from temp_profile (prevents
+        # "Failed to create a ProcessSingleton" errors on repeated runs)
+        import glob
+        for lockfile in glob.glob("temp_profile/Singleton*"):
+            try:
+                os.remove(lockfile)
+                print(f"  {Colors.GREY}Removed stale lock: {lockfile}{Colors.END}")
+            except OSError:
+                pass
         try:
+            debug_print("Launching temp_profile fallback...", prefix="BROWSER")
             context = playwright_instance.chromium.launch_persistent_context(
                 user_data_dir="temp_profile",
                 channel=channel,
@@ -1964,10 +1862,11 @@ def fill_page_form(page, candidate_profile, config, anschreiben_path, cv_path):
     return actions_succeeded > 0
 
 # Process a job application URL
-def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_approve=False, criteria_path=None, tee=None, workspace_dir=None, no_email=False):
+def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_approve=False, criteria_path=None, tee=None, workspace_dir=None, no_email=False, force_generate=False):
     if criteria_path is None:
         criteria_path = os.path.join(os.path.dirname(__file__), "config", "job_criteria.yaml")
     print(f"\n{Colors.GREY}{'='*80}{Colors.END}")
+    debug_print("Navigating to URL...", prefix="GOTO")
     print(f"{Colors.CYAN}{Colors.BOLD}Processing vacancy: {Colors.END}{Colors.BLUE}{Colors.UNDERLINE}{url}{Colors.END}")
     print(f"{Colors.GREY}{'-'*80}{Colors.END}")
     try:
@@ -1986,188 +1885,101 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
     # Extract body text for matching
     job_text = page.locator("body").inner_text()
     
-    # Check for dead link / 404 / non-job pages before spending LLM quota
-    page_title_lower = page_title.lower()
-    dead_link_phrases = ["nicht gefunden", "page not found", "404", "seite nicht",
-                         "error", "doesn't exist", "does not exist"]
-    if any(phrase in page_title_lower for phrase in dead_link_phrases):
-        if any(phrase in job_text[:500].lower() for phrase in dead_link_phrases):
-            print(f"{Colors.YELLOW}Skipping: Job listing page appears to be a dead link (404).{Colors.END}")
-            return
-    # Catch Indeed/LinkedIn search pages returned instead of a job detail page
-    non_job_page_indicators = ["jobbörse", "jobsuche", "stellenmarkt", "deutschlands jobbörse"]
-    if any(phrase in page_title_lower for phrase in non_job_page_indicators) and len(job_text.strip()) < 500:
-        print(f"{Colors.YELLOW}Skipping: Page appears to be a job search page, not a job listing (dead/expired link).{Colors.END}")
+    # Exact URL dedup (fast, no LLM)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM applied_jobs WHERE url = ?", (url,))
+    if cursor.fetchone():
+        print(f"{Colors.YELLOW}Skipping: URL already processed.{Colors.END}")
+        debug_print("Skipping: URL already in DB", prefix="INTAKE")
+        print(f"{Colors.GREY}{'='*80}{Colors.END}\n")
+        return
+    debug_print("Calling job_intake_check (LLM)...", prefix="INTAKE")
+
+    # Unified LLM intake: validates job, extracts metadata, detects industry,
+    # checks forbidden titles, KO filters, and duplicates — all in one prompt
+    print(f"  {Colors.GREY}Running unified job intake (LLM)...{Colors.END}")
+    debug_print("Calling job_intake_check (LLM)...", prefix="INTAKE")
+    intake = job_intake_check(page_title, job_text, url, candidate_profile, criteria, conn)
+    
+    if not intake.get("is_valid_job", True):
+        reason = intake.get("invalid_reason", "Unknown")
+        print(f"{Colors.YELLOW}Skipping: Invalid job page — {reason}{Colors.END}")
+        debug_print(f"Skipping: invalid job ({reason})", prefix="INTAKE")
+        print(f"{Colors.GREY}{'='*80}{Colors.END}\n")
+        return
+        
+    if intake.get("is_duplicate", False):
+        dup = intake.get("duplicate_of", "unknown")
+        print(f"{Colors.YELLOW}Skipping: Duplicate of {dup}{Colors.END}")
+        debug_print(f"Skipping: duplicate ({dup})", prefix="INTAKE")
+        print(f"{Colors.GREY}{'='*80}{Colors.END}\n")
+        return
+        
+    if intake.get("ko_triggered", False):
+        ko_reason = intake.get("ko_reason", "KO filter")
+        print(f"{Colors.YELLOW}Skipping: KO filter triggered — {ko_reason}{Colors.END}")
+        debug_print(f"Skipping: KO filter ({ko_reason})", prefix="INTAKE")
+        log_application(conn, intake.get("company_name", "Unbekannt"),
+                       intake.get("job_title", "Unbekannt"), url, 0.0, "Skipped (KO)")
+        print(f"{Colors.GREY}{'='*80}{Colors.END}\n")
+        return
+        
+    if intake.get("forbidden_title_detected", False):
+        reason = intake.get("forbidden_title_reason", "Forbidden title")
+        print(f"{Colors.YELLOW}Skipping: {reason}{Colors.END}")
+        debug_print(f"Skipping: forbidden title ({reason})", prefix="INTAKE")
+        log_application(conn, intake.get("company_name", "Unbekannt"),
+                       intake.get("job_title", "Unbekannt"), url, 0.0, "Skipped (Low Score)")
+        print(f"{Colors.GREY}{'='*80}{Colors.END}\n")
         return
     
-    company_name = "Unbekannt"
-    job_title = "Unbekannt"
+    company_name = intake.get("company_name", "Unbekannt")
+    job_title = intake.get("job_title", "Unbekannt")
+    industry = intake.get("industry", "Allgemein")
     
-    # Try rule-based extraction first to save Gemini API quota
-    url_lower = url.lower()
-    if "linkedin.com" in url_lower:
-        parts = [p.strip() for p in page_title.split("|")]
-        if len(parts) >= 3:
-            if parts[-1].lower() == "linkedin":
-                company_name = parts[-2]
-                job_title = parts[0]
-            else:
-                job_title = parts[0]
-                company_name = parts[1]
-        elif len(parts) == 2:
-            if parts[1].lower() == "linkedin":
-                if " at " in parts[0]:
-                    subparts = parts[0].split(" at ")
-                    job_title = subparts[0].strip()
-                    company_name = subparts[1].strip()
-                elif " bei " in parts[0]:
-                    subparts = parts[0].split(" bei ")
-                    job_title = subparts[0].strip()
-                    company_name = subparts[1].strip()
-                else:
-                    job_title = parts[0]
-            else:
-                job_title = parts[0]
-                company_name = parts[1]
-        else:
-            job_title = page_title
-            
-    elif "indeed.com" in url_lower:
-        try:
-            company_selectors = [
-                "[data-testid='inline-companyname']",
-                ".jobsearch-InlineCompanyRating",
-                ".jobsearch-CompanyInfoContainer",
-                "[class*='InlineCompanyRating']",
-                "[class*='companyName']"
-            ]
-            for sel in company_selectors:
-                el = page.locator(sel).first
-                if el.is_visible():
-                    company_name = el.inner_text().strip()
-                    if "\n" in company_name:
-                        company_name = company_name.split("\n")[0].strip()
-                    break
-        except Exception:
-            pass
-            
-        try:
-            title_selectors = [
-                "h1",
-                ".jobsearch-JobInfoHeader-title",
-                "[data-testid='jobsearch-JobInfoHeader-title']"
-            ]
-            for sel in title_selectors:
-                el = page.locator(sel).first
-                if el.is_visible():
-                    job_title = el.inner_text().strip()
-                    break
-        except Exception:
-            pass
-            
-        if job_title == "Unbekannt":
-            parts = [p.strip() for p in page_title.split("-")]
-            if len(parts) >= 2:
-                job_title = parts[0]
-                if company_name == "Unbekannt" and len(parts) >= 3:
-                    company_name = parts[1]
-                    
-    # Clean up company name suffixes
-    if company_name and company_name.endswith(" GmbH & Co. KG"):
-        company_name = company_name[:-14].strip()
-    elif company_name and company_name.endswith(" GmbH"):
-        company_name = company_name[:-5].strip()
-    elif company_name and company_name.endswith(" AG"):
-        company_name = company_name[:-3].strip()
-
-    # Fallback to Gemini if rule-based extraction failed to find both
-    if company_name == "Unbekannt" or job_title == "Unbekannt":
-        print(f"{Colors.YELLOW}Rule-based metadata extraction incomplete. Querying Gemini as fallback...{Colors.END}")
-        init_gemini()
-        prompt = f"""
-        Extrahiere den Firmennamen (company_name) und die Berufsbezeichnung (job_title) aus folgendem Seitentitel und Text.
-        Seitentitel: {page_title}
-        Text: {job_text[:2000]}
-        
-        Gib NUR ein JSON-Dokument zurück in der Form:
-        {{
-          "company_name": "...",
-          "job_title": "..."
-        }}
-        """
-        try:
-            resp = llm_request_with_fallback(prompt)
-            text = resp.text.strip()
-            if text.startswith("```json"): text = text[7:]
-            if text.startswith("```"): text = text[3:]
-            if text.endswith("```"): text = text[:-3]
-            meta = json.loads(text.strip())
-            if company_name == "Unbekannt":
-                company_name = meta.get("company_name") or "Unbekannt"
-            if job_title == "Unbekannt":
-                job_title = meta.get("job_title") or "Unbekannt"
-        except Exception:
-            if job_title == "Unbekannt":
-                job_title = page_title[:50]
-                
-    company_name = company_name or "Unbekannt"
-    job_title = job_title or "Unbekannt"
     print(f"  {Colors.GREY}Company:{Colors.END} {Colors.CYAN}{company_name}{Colors.END}")
     print(f"  {Colors.GREY}Job Title:{Colors.END} {Colors.CYAN}{job_title}{Colors.END}")
+    print(f"  {Colors.GREY}Industry:{Colors.END} {Colors.CYAN}{industry}{Colors.END}")
+    if intake.get("industry_reasoning"):
+        print(f"    {Colors.GREY}→ {intake['industry_reasoning']}{Colors.END}")
     
+    # Secondary dedup check (company+title cleanup)
     if is_already_applied(conn, company_name, job_title, url):
-        print(f"{Colors.YELLOW}Skipping: You have already applied for this position or at this company recently.{Colors.END}")
+        print(f"{Colors.YELLOW}Skipping: Duplicate by company/title match.{Colors.END}")
+        debug_print("Skipping: duplicate by company/title", prefix="INTAKE")
         print(f"{Colors.GREY}{'='*80}{Colors.END}\n")
         return
-        
-    # Check excluded companies
-    excluded_companies = criteria.get("ko_filters", {}).get("companies_blacklist", [])
-    if any(ex.lower() in company_name.lower() for ex in excluded_companies):
-        print(f"{Colors.YELLOW}Skipping: Company '{company_name}' is in the excluded companies list.{Colors.END}")
-        print(f"{Colors.GREY}{'='*80}{Colors.END}\n")
-        return
-        
-    # Check forbidden job titles (static from config + dynamic from profile-based algorithm)
-    forbidden_titles_static = criteria.get("ko_filters", {}).get("forbidden_titles", [])
-    forbidden_titles_dynamic = compute_forbidden_titles(candidate_profile)
-    forbidden_titles = list(set(forbidden_titles_static + forbidden_titles_dynamic))
-    if any(re.search(r'\b' + re.escape(ft) + r'\b', job_title, re.IGNORECASE) for ft in forbidden_titles):
-        print(f"{Colors.YELLOW}Skipping: Job title '{job_title}' matches forbidden title/role.{Colors.END}")
-        log_application(conn, company_name, job_title, url, 0.0, "Skipped (Low Score)")
-        print(f"{Colors.GREY}{'='*80}{Colors.END}\n")
-        return
-
-    # Detect industry per job (IT/Allgemein/Handwerk) with Allgemein as default
-    industry = detect_industry(job_title, job_text, candidate_profile)
+    
+    # Get mandatory skills from industry config
     industry_cfg = criteria.get("industries", {}).get(industry, {})
     mandatory_skills = industry_cfg.get("cover_letter", {}).get("mandatory_skills", [])
     
-    # Score job
-    past_rejections = get_past_rejections(conn)
-    yaml_rejections = criteria.get("ko_filters", {}).get("user_rejected_reasons", [])
-    if yaml_rejections:
-        past_rejections = list(set(past_rejections + yaml_rejections))
-    local_ko_reason = check_local_ko_filters(job_text, criteria, candidate_profile)
-    if local_ko_reason:
-        print(f"{Colors.YELLOW}Local K.O. pre-filter triggered: {local_ko_reason}{Colors.END}")
-        score_data = {
-            "total_score": 0.0,
-            "ko_criterion_triggered": True,
-            "reasoning": f"Local K.O. filter: {local_ko_reason}"
-        }
+    # Score job (skip if --force-generate)
+    if force_generate:
+        print(f"  {Colors.YELLOW}{Colors.BOLD}[FORCE-GENERATE] Skipping scoring, generating Anschreiben directly...{Colors.END}")
+        debug_print("FORCE-GENERATE mode — skipping scoring, generating directly", prefix="SCORE")
+        total_score = 10.0
+        debug_print(f"Calling score_job (LLM) for {industry}...", prefix="SCORE")
+        is_ko = False
     else:
+        past_rejections = get_past_rejections(conn)
+        yaml_rejections = criteria.get("ko_filters", {}).get("user_rejected_reasons", [])
+        if yaml_rejections:
+            past_rejections = list(set(past_rejections + yaml_rejections))
+        debug_print(f"Calling score_job (LLM) for {industry}...", prefix="SCORE")
         score_data = score_job(candidate_profile, job_text, config, criteria, past_rejections, industry=industry, mandatory_skills=mandatory_skills)
-    total_score = score_data.get("total_score", 0.0)
+        total_score = score_data.get("total_score", 0.0)
+        is_ko = score_data.get("ko_criterion_triggered", False)
     
-    min_score = industry_cfg.get("scoring", {}).get("min_score_to_apply", 8.0)
-    is_ko = score_data.get("ko_criterion_triggered", False)
+    min_score = industry_cfg.get("scoring", {}).get("min_score_to_apply", 8.0) if not force_generate else 0.0
     if total_score >= min_score and not is_ko:
         print(f"  {Colors.GREY}Match Score:{Colors.END} {Colors.GREEN}{Colors.BOLD}{total_score}/10 (PASSED){Colors.END}")
     else:
         print(f"  {Colors.GREY}Match Score:{Colors.END} {Colors.RED}{Colors.BOLD}{total_score}/10 (FAILED){Colors.END}")
         
-    if total_score < min_score or is_ko:
+    if not force_generate and total_score < min_score:
         reason = score_data.get("reasoning", "Below minimum matching score threshold.")
+        debug_print(f"Skipping: low score {total_score}/{min_score} ({reason})", prefix="SCORE")
         print(f"{Colors.RED}Skipping job: {reason}{Colors.END}")
         log_application(conn, company_name, job_title, url, total_score, "Skipped (Low Score)")
         print(f"{Colors.GREY}{'='*80}{Colors.END}\n")
@@ -2188,8 +2000,10 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
             cv_text_raw = cv_text_raw.strip()
     except Exception as e:
         print(f"{Colors.YELLOW}Warning: Could not read CV PDF for Anschreiben: {e}{Colors.END}")
-    anschreiben_text = generate_anschreiben(candidate_profile, job_text, config, criteria, cv_text=cv_text_raw, industry=industry, mandatory_skills=mandatory_skills)
+    debug_print("Calling generate_anschreiben (LLM)...", prefix="ANSCHREIBEN")
+    anschreiben_data = generate_anschreiben(candidate_profile, job_text, config, criteria, cv_text=cv_text_raw, industry=industry, mandatory_skills=mandatory_skills)
     
+    debug_print("Calling save_anschreiben_pdf...", prefix="PDF")
     output_dir = os.path.join(os.path.dirname(__file__), "output")
     safe_company_name = "".join([c for c in company_name if c.isalnum() or c in (" ", "_")]).strip().replace(" ", "_")
     anschreiben_pdf_path = os.path.join(output_dir, f"Anschreiben_{safe_company_name}.pdf")
@@ -2198,10 +2012,10 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
         pdf_context = page.context
     except Exception:
         pdf_context = None
-    save_anschreiben_pdf(anschreiben_text, company_name, candidate_profile, anschreiben_pdf_path, browser_context=pdf_context)
+    save_anschreiben_pdf(anschreiben_data, company_name, candidate_profile, anschreiben_pdf_path, browser_context=pdf_context)
     
     # Try direct email application if job text contains contact email
-    from job_agent.direct_email_applier import extract_contact_info, personalize_anschreiben, collect_relevant_attachments, send_direct_email
+    from job_agent.direct_email_applier import extract_contact_info, collect_relevant_attachments, send_direct_email
     if auto_approve and not no_email:
         
         contact = extract_contact_info(job_text)
@@ -2209,19 +2023,29 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
             print(f"{Colors.BLUE}Found contact email in job: {contact['email']}{Colors.END}")
             if contact.get("recruiter_name"):
                 print(f"{Colors.BLUE}Found recruiter name: {contact['recruiter_name']}. Personalizing Anschreiben...{Colors.END}")
-                anschreiben_text = personalize_anschreiben(anschreiben_text, contact["recruiter_name"])
+                # Update salutation in dict and rebuild full_text
+                name = contact["recruiter_name"].strip().split('\n')[0].strip()
+                nl = name.lower()
+                if nl.startswith("herr "):
+                    anschreiben_data["salutation"] = f"Sehr geehrter {name[5:]},"
+                elif nl.startswith("frau "):
+                    anschreiben_data["salutation"] = f"Sehr geehrte {name[5:]},"
+                else:
+                    anschreiben_data["salutation"] = f"Guten Tag {name},"
+                anschreiben_data["full_text"] = f"{anschreiben_data.get('subject', 'Bewerbung')}\n\n{anschreiben_data['salutation']}\n\n{anschreiben_data.get('body', '')}\n\n{anschreiben_data.get('closing', 'Mit freundlichen Grüßen')}"
                 try:
                     pdf_context = page.context
                 except Exception:
                     pdf_context = None
-                save_anschreiben_pdf(anschreiben_text, company_name, candidate_profile, anschreiben_pdf_path, browser_context=pdf_context)
+                save_anschreiben_pdf(anschreiben_data, company_name, candidate_profile, anschreiben_pdf_path, browser_context=pdf_context)
             
+            anschreiben_full_text = anschreiben_data.get("full_text", "") if isinstance(anschreiben_data, dict) else anschreiben_data
             attachments = collect_relevant_attachments(conn, job_text, anschreiben_pdf_path, workspace_dir)
             success = send_direct_email(
                 config.get("smtp", {}),
                 candidate_profile,
                 contact,
-                anschreiben_text,
+                anschreiben_full_text,
                 attachments,
                 job_title,
                 company_name,
@@ -2276,12 +2100,13 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
             candidate_email = candidate_profile.get("personal_info", {}).get("email")
             if candidate_email:
                 fallback_contact = {"email": candidate_email, "recruiter_name": None}
+                anschreiben_full_text = anschreiben_data.get("full_text", "") if isinstance(anschreiben_data, dict) else anschreiben_data
                 attachments = collect_relevant_attachments(conn, job_text, anschreiben_pdf_path, workspace_dir)
                 email_sent = send_direct_email(
                     config.get("smtp", {}),
                     candidate_profile,
                     fallback_contact,
-                    anschreiben_text,
+                    anschreiben_full_text,
                     attachments,
                     job_title,
                     company_name,
@@ -2584,8 +2409,14 @@ def main():
     parser.add_argument("--send-email", action="store_true", help="Send email summaries for all successfully applied jobs")
     parser.add_argument("--headless", action="store_true", help="Run Chrome in headless mode (no visible browser window)")
     parser.add_argument("--no-email", action="store_true", help="Skip direct email sending to employers during testing")
+    parser.add_argument("--debug", action="store_true", help="[DEBUG] Enable verbose debug output at bottleneck points")
+    parser.add_argument("--force-generate", action="store_true", help="[DEBUG] Skip scoring, generate Anschreiben directly")
     
     args = parser.parse_args()
+    if args.debug:
+        global DEBUG
+        DEBUG = True
+        debug_print("Debug mode enabled — verbose bottleneck logging active", prefix="INIT")
     
     # If email sending is requested, enable auto-approve to process applications without interaction
     if args.send_email:
@@ -2758,7 +2589,8 @@ def main():
                         criteria_path=criteria_path,
                         tee=tee,
                         workspace_dir=workspace_dir,
-                        no_email=args.no_email
+                        no_email=args.no_email,
+                        force_generate=args.force_generate
                     )
             elif args.interactive:
                 print(f"{Colors.MAGENTA}Interactive mode started. Type 'exit' to quit.{Colors.END}")
@@ -2781,7 +2613,8 @@ def main():
                                 criteria_path=criteria_path,
                                 tee=tee,
                                 workspace_dir=workspace_dir,
-                                no_email=args.no_email
+                                no_email=args.no_email,
+                                force_generate=args.force_generate
                             )
                     except Exception as e:
                         print(f"{Colors.RED}Error processing URL: {e}{Colors.END}")
@@ -2843,7 +2676,8 @@ def main():
                                     criteria_path=criteria_path,
                                     tee=tee,
                                     workspace_dir=workspace_dir,
-                                    no_email=args.no_email
+                                    no_email=args.no_email,
+                                    force_generate=args.force_generate
                                 )
                         except Exception as e:
                             print(f"{Colors.RED}Error processing job at {url}: {e}{Colors.END}")
@@ -2882,7 +2716,8 @@ def main():
                                     criteria_path=criteria_path,
                                     tee=tee,
                                     workspace_dir=workspace_dir,
-                                    no_email=args.no_email
+                                    no_email=args.no_email,
+                                    force_generate=args.force_generate
                                 )
                         except Exception as e:
                             estr = str(e)

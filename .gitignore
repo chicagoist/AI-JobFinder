@@ -81,6 +81,8 @@ AI-JobFinder-dist.zip
 !/AGENTS.md
 !src/knowledge.md
 !/src/knowledge.md
+!knowledge.md
+!/knowledge.md
 
 # Test files used during development (not part of the core app)
 src/mock_jobs.py

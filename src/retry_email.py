@@ -208,9 +208,15 @@ def retry_single(db_id: int) -> int:
             cv_text_raw = cv_text_raw.strip()
     except Exception as e:
         print(f"{Colors.YELLOW}Warning: Could not read CV PDF for Anschreiben: {e}{Colors.END}")
-    ans_text = generate_anschreiben(candidate_profile, job_text, config, cv_text=cv_text_raw)
-    if not ans_text:
+    ans_data = generate_anschreiben(candidate_profile, job_text, config, cv_text=cv_text_raw)
+    if not ans_data:
         print(f"{Colors.RED}Failed to generate Anschreiben.{Colors.END}")
+        return 1
+
+    # Extract full_text for email/personalization (Phase 8: dict with full_text field)
+    ans_text = ans_data.get("full_text", "") if isinstance(ans_data, dict) else str(ans_data)
+    if not ans_text or ans_text == "Leider konnte kein Anschreiben generiert werden.":
+        print(f"{Colors.RED}Failed to generate Anschreiben (empty text).{Colors.END}")
         return 1
 
     # Personalize if recruiter name found
