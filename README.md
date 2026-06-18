@@ -270,7 +270,8 @@ user_profile:
 | **Where to get** | https://openrouter.ai/keys (sign up, create a free API key) |
 | **Cost** | Free tier: 20 RPM, 50 RPD, multiple models (Llama 3, Mistral, Qwen, DeepSeek, Gemma) |
 | **What it's used for** | Automatic fallback when ALL Gemini keys and models are exhausted |
-| **How to set** | Set as environment variable: `$env:OPENROUTER_API_KEY="sk-or-v1-..."` or in system environment variables. **Do NOT** put it in `config.yaml`. |
+| **How to set** | Environment variable `OPENROUTER_API_KEY` (preferred) or in `config.yaml` → `openrouter.api_key`. See [Setting Environment Variables](#setting-environment-variables) below. |
+| **Custom model** | Optional: set `OPENROUTER_MODEL` env var to override the default free model |
 
 #### SMTP / Google App Password
 
@@ -289,7 +290,133 @@ user_profile:
 |------|--------|
 | **Where to get** | https://platform.deepseek.com/api_keys |
 | **Cost** | Paid (requires account balance top-up). Free credits on registration. |
+| **How to set** | Environment variables: `DEEPSEEK_API_KEY` or `DEEPSEEK_KEY`. Custom model via `DEEPSEEK_MODEL`. |
 | **Usage** | Experimental module `job_agent/deepseek_llm.py`. Not used unless explicitly configured. |
+
+#### Groq API Key (optional, experimental)
+
+| Item | Detail |
+|------|--------|
+| **Where to get** | https://console.groq.com/keys |
+| **Cost** | Free tier available (rate-limited). |
+| **How to set** | Environment variables: `GROQ_API_KEY` or `GROQ_KEY`. Custom model via `GROQ_MODEL`. |
+| **Usage** | Experimental module `job_agent/groq_llm.py`. Not used unless explicitly configured. |
+
+---
+
+### Setting Environment Variables
+
+Some API keys (OpenRouter, DeepSeek, Groq) are read from **environment variables** so they never appear in config files. Environment variables must be set **before** running the agent or added **globally** to persist across reboots.
+
+> ⚠️ Environment variables set in a terminal window only live for that session. To make them permanent, use the global methods below.
+
+#### Required Variables
+
+| Variable | Service | Priority | Example |
+|----------|---------|----------|---------|
+| `OPENROUTER_API_KEY` | OpenRouter | 🔴 Required (if using OpenRouter) | `sk-or-v1-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
+| `OPENROUTER_MODEL` | OpenRouter model | 🟡 Optional | `openai/gpt-oss-120b:free` |
+| `DEEPSEEK_API_KEY` | DeepSeek | 🟢 Optional | `sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
+| `DEEPSEEK_MODEL` | DeepSeek model | 🟢 Optional | `deepseek-v4-flash` |
+| `GROQ_API_KEY` | Groq | 🟢 Optional | `gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
+| `GROQ_MODEL` | Groq model | 🟢 Optional | `llama-3.3-70b-versatile` |
+
+> **Note:** Gemini API keys are stored in `config.yaml` (not environment variables) — they are read directly from the config file.
+
+#### Windows
+
+##### Method 1: System-wide (GUI)
+
+1. Press **Win + R**, type `sysdm.cpl`, press Enter
+2. Go to tab **Advanced** → button **Environment Variables…**
+3. Under **User variables** (or System variables for all users), click **New…**
+4. Variable name: `OPENROUTER_API_KEY`
+5. Variable value: `sk-or-v1-xxxxxxxxxxxxx`
+6. Click OK → OK → OK
+7. **Restart** any open terminal windows for changes to take effect
+
+##### Method 2: PowerShell (permanent, current user)
+
+```powershell
+[System.Environment]::SetEnvironmentVariable('OPENROUTER_API_KEY', 'sk-or-v1-xxxxxxxxxxxxx', 'User')
+[System.Environment]::SetEnvironmentVariable('OPENROUTER_MODEL', 'openai/gpt-oss-120b:free', 'User')
+```
+
+> Replace `'User'` with `'Machine'` for system-wide (requires Admin).
+
+##### Method 3: Command Prompt (permanent, current user)
+
+```cmd
+setx OPENROUTER_API_KEY "sk-or-v1-xxxxxxxxxxxxx"
+setx OPENROUTER_MODEL "openai/gpt-oss-120b:free"
+```
+
+##### Verify (Windows)
+
+```powershell
+# PowerShell
+$env:OPENROUTER_API_KEY
+```
+```cmd
+:: Command Prompt
+echo %OPENROUTER_API_KEY%
+```
+
+#### Linux / macOS
+
+##### Method 1: Shell profile (recommended — persists across reboots)
+
+Add to `~/.bashrc` (Bash) or `~/.zshrc` (Zsh):
+
+```bash
+# OpenRouter — free LLM fallback
+export OPENROUTER_API_KEY="sk-or-v1-xxxxxxxxxxxxx"
+export OPENROUTER_MODEL="openai/gpt-oss-120b:free"
+
+# Optional: DeepSeek
+export DEEPSEEK_API_KEY="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Optional: Groq
+export GROQ_API_KEY="gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
+Then reload:
+
+```bash
+source ~/.bashrc   # or: source ~/.zshrc
+```
+
+##### Method 2: System-wide (all users)
+
+Add to `/etc/environment` (no `export` keyword, requires `sudo`):
+
+```bash
+sudo nano /etc/environment
+```
+
+```
+OPENROUTER_API_KEY="sk-or-v1-xxxxxxxxxxxxx"
+OPENROUTER_MODEL="openai/gpt-oss-120b:free"
+```
+
+Reboot or run `source /etc/environment` to apply.
+
+##### Method 3: Systemd user service (advanced)
+
+For users who run the agent as a systemd service:
+
+```bash
+mkdir -p ~/.config/environment.d
+echo 'OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxxx' >> ~/.config/environment.d/ai-jobfinder.conf
+```
+
+##### Verify (Linux / macOS)
+
+```bash
+echo $OPENROUTER_API_KEY
+# or
+printenv OPENROUTER_API_KEY
+```
 
 ### Configuration Files
 
