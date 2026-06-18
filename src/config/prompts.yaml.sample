@@ -1,5 +1,4 @@
-classification_prompt: 'Klassifiziere das folgende Dokument (die ersten 1000 Zeichen
-  Text) in eine der folgenden Kategorien:
+classification_prompt: 'Klassifiziere das folgende Dokument (die ersten 1000 Zeichen Text) in eine der folgenden Kategorien:
 
   - "Lebenslauf" (CV)
 
@@ -18,25 +17,16 @@ classification_prompt: 'Klassifiziere das folgende Dokument (die ersten 1000 Zei
 
 
   Gib NUR den Kategorienamen zurück (z.B. "Lebenslauf").'
-cover_letter_prompt: "Erstelle ein professionelles Anschreiben auf Deutsch basierend\
-  \ auf dem Kandidatenprofil und der Stellenbeschreibung.\n\nKandidatenprofil:\n{candidate_profile}\n\
-  \nStellenbeschreibung:\n{job_description}\n\nZusätzliche Vorgaben:\n- Gehaltsvorstellung:\
-  \ {salary_exp} € brutto pro Jahr.\n- Verfügbarkeit / Eintrittstermin: {availability}.\n\
-  - Sprachniveau Deutsch: {candidate_german}.\n- Pflichtkompetenzen: {mandatory_skills}.\n\
-  \nFormat (DIN 5008):\n1. Betreffzeile (fett): \"Bewerbung als [Position]\"\
-  \ — mit konkreter Position aus der Stellenbeschreibung.\n2. Anrede: \"Sehr\
-  \ geehrte Damen und Herren,\" oder personalisiert falls Ansprechpartner bekannt.\n\
-  3. Brieftext (body): Einleitung, Motivation, Kompetenzen, Gehaltsvorstellung, Verfügbarkeit,\
-  \ Schlusssatz.\n4. Grußformel (closing): \"Mit freundlichen Grüßen\".\n\n\
-  Antworte NUR mit folgendem JSON-Objekt (kein Markdown, kein ```json):\n{{\n  \"\
-  subject\": \"Bewerbung als Cloud Engineer\",\n  \"salutation\": \"Sehr\
-  \ geehrte Damen und Herren,\",\n  \"body\": \"Der vollständige Haupttext\
-  \ des Anschreibens (ohne Betreff, ohne Anrede, ohne Grußformel).\\n\\nMehrere Absätze\
-  \ durch Leerzeile getrennt.\",\n  \"closing\": \"Mit freundlichen Grüßen\"\
-  \n}}"
-form_filler_prompt: 'Du bist ein KI-Assistent, der Webformulare ausfüllt. Dir liegen
-  die interaktiven Elemente der aktuellen Webseite sowie das Profil des Kandidaten
-  vor.
+cover_letter_prompt: "Erstelle ein professionelles Anschreiben auf Deutsch basierend auf dem Kandidatenprofil und der Stellenbeschreibung.\n\nKandidatenprofil:\n{candidate_profile}\n\nStellenbeschreibung:\n\
+  {job_description}\n\nZusätzliche Vorgaben:\n- Gehaltsvorstellung: {salary_exp} € brutto pro Jahr.\n- Verfügbarkeit / Eintrittstermin: {availability}.\n- Sprachniveau Deutsch: {candidate_german}.\n- Pflichtkompetenzen:\
+  \ {mandatory_skills}.\n\nFormat (DIN 5008):\n1. Betreffzeile (fett): \"Bewerbung als [Position]\" — mit konkreter Position aus der Stellenbeschreibung.\n2. Anrede: \"Sehr geehrte Damen und Herren,\" oder\
+  \ personalisiert falls Ansprechpartner bekannt.\n3. Brieftext (body): Einleitung, Motivation, Kompetenzen, Gehaltsvorstellung, Verfügbarkeit, Schlusssatz.\n4. Grußformel (closing): \"Mit freundlichen\
+  \ Grüßen\".\n\nAntworte NUR mit folgendem JSON-Objekt (kein Markdown, kein ```json):\n{{\n  \"subject\": \"Bewerbung als Cloud Engineer\",\n  \"salutation\": \"Sehr geehrte Damen und Herren,\",\n  \"\
+  body\": \"Der vollständige Haupttext des Anschreibens (ohne Betreff, ohne Anrede, ohne Grußformel).\\n\\nMehrere Absätze durch Leerzeile getrennt.\",\n  \"closing\": \"Mit freundlichen Grüßen\"\n}}\n\n\
+  Antworte NUR mit folgendem JSON-Objekt (kein Markdown, kein ```json):\n{{\n  \"subject\": \"Bewerbung als [Position] — mit konkreter Position aus der Stellenbeschreibung\",\n  \"salutation\": \"Sehr geehrte\
+  \ Damen und Herren,\",\n  \"body\": \"Der vollständige Haupttext des Anschreibens (ohne Betreff, ohne Anrede, ohne Grußformel).\\n\\nMehrere Absätze durch Leerzeile getrennt.\",\n  \"closing\": \"Mit\
+  \ freundlichen Grüßen\"\n}}"
+form_filler_prompt: 'Du bist ein KI-Assistent, der Webformulare ausfüllt. Dir liegen die interaktiven Elemente der aktuellen Webseite sowie das Profil des Kandidaten vor.
 
 
   Kandidatenprofil (JSON):
@@ -58,84 +48,51 @@ form_filler_prompt: 'Du bist ein KI-Assistent, der Webformulare ausfüllt. Dir l
   {elements}
 
 
-  Entscheide für jedes relevante Element auf der Seite, welche Aktion ausgeführt werden
-  soll.
+  Entscheide für jedes relevante Element auf der Seite, welche Aktion ausgeführt werden soll.
 
   Mögliche Aktionen:
 
-  - {"action": "fill", "ref_id": "...", "value": "..."}: Für Textfelder (Vorname,
-  Nachname, Email, Telefon, Gehaltsvorstellung etc.)
+  - {"action": "fill", "ref_id": "...", "value": "..."}: Für Textfelder (Vorname, Nachname, Email, Telefon, Gehaltsvorstellung etc.)
 
-  - {"action": "click", "ref_id": "..."}: Zum Anklicken von Checkboxen (z.B. Datenschutz,
-  Bestätigungen). HINWEIS: Klicke NICHT auf Submit/Weiter-Buttons, da diese vom Hauptscript
-  gesteuert werden!
+  - {"action": "click", "ref_id": "..."}: Zum Anklicken von Checkboxen (z.B. Datenschutz, Bestätigungen). HINWEIS: Klicke NICHT auf Submit/Weiter-Buttons, da diese vom Hauptscript gesteuert werden!
 
-  - {"action": "upload_cv", "ref_id": "..."}: Wenn ein Input-Feld (type=file) für
-  den Lebenslauf (CV/Resume) gedacht ist.
+  - {"action": "upload_cv", "ref_id": "..."}: Wenn ein Input-Feld (type=file) für den Lebenslauf (CV/Resume) gedacht ist.
 
-  - {"action": "upload_cover_letter", "ref_id": "..."}: Wenn ein Input-Feld (type=file)
-  für das Anschreiben (Cover Letter) gedacht ist.
+  - {"action": "upload_cover_letter", "ref_id": "..."}: Wenn ein Input-Feld (type=file) für das Anschreiben (Cover Letter) gedacht ist.
 
 
-  Gib NUR das reine JSON-Dokument zurück (eine Liste von Aktionen), ohne Erklärungen
-  oder Markdown-Tags.'
-scoring_prompt: "Vergleiche das Kandidatenprofil mit der Stellenbeschreibung (Job\
-  \ Description). Bewerte das Match auf einer Skala von 0 bis 10.\n\nKandidatenprofil:\n\
-  {candidate_profile}\n\nStellenbeschreibung:\n{job_description}\n{rejections_str}\n\
-  \nKO-Kriterien (MÜSSEN geprüft werden):\n- Sicherheitsfreigaben: {clearance_keywords}\n\
-  - Pflichtzertifikate: {certifications}\n- Bildungsanbieter: {spam_keywords}\n\
-  - Datacenter: {datacenter_keywords}\n- Mindestgehalt: {min_salary} EUR\n\
-  - Sprachen: Deutsch {candidate_german}, Englisch {candidate_english}\n\
-  - Berufserfahrung seit: {career_start_year}\n\n\
-  Bewertungskriterien:\n1. Hard Skills (max 4.0)\n2. Erfahrung/Seniorität (max 3.0)\n\
-  3. Sprachen (max 2.0)\n4. Standort (max 1.0)\n\n\
-  Pflichtkompetenzen: {mandatory_skills}\n\n\
-  Gib NUR das reine JSON-Dokument zurück:\n\
-  {{\n  \"scores\": {{\"hard_skills\": 0.0, \"experience\": 0.0, \"languages\": 0.0, \"location\": 0.0}},\n\
-  \  \"total_score\": 0.0,\n  \"reasoning\": \"Begründung\",\n  \"ko_criterion_triggered\": false\n}}"
-scoring_prompt_IT: "Du bist ein erfahrener IT-Recruiter in Deutschland. Vergleiche\
-  \ das Kandidatenprofil mit der Stellenbeschreibung.\n\nKandidatenprofil:\n{candidate_profile}\n\
-  \nStellenbeschreibung:\n{job_description}\n{rejections_str}\n\nRegeln:\n\
-  1. Mindestgehalt: unter {min_salary} EUR → Score 0.\n\
-  2. Sprachen: Deutsch {candidate_german}, Englisch {candidate_english}.\n\
-  3. KO: Sicherheitsfreigaben ({clearance_keywords}), Zertifikate ({certifications}),\
-  \ Bildungsanbieter ({spam_keywords}), Datacenter ({datacenter_keywords}).\n\
-  4. Full Stack Developer / Consultant / Support → Score 0.\n\
-  5. Berufserfahrung seit {career_start_year}.\n\n\
-  Pflichtkompetenzen: {mandatory_skills}\n\n\
-  Gib NUR JSON zurück:\n\
-  {{\n  \"total_score\": 0.0,\n  \"ko_criterion_triggered\": false,\n  \"reasoning\": \"Begründung\"\n}}"
-extract_recruiter_prompt: "Extrahiere den vollständigen Namen des Recruiters/Ansprechpartners\
-  \ aus der folgenden Stellenbeschreibung.\n\nDer E-Mail-Kontakt für Bewerbungen\
-  \ ist: {email}\n\nStellenbeschreibung:\n{job_text}\n\nGib NUR den Namen zurück\
-  \ (z.B. \"Max Mustermann\"). Wenn kein Name gefunden wird, gib eine leere Zeile\
-  \ zurück."
-job_intake_prompt: "Du bist ein Job-Intake-Analyst. Analysiere eine Stellenanzeige\
-  \ VOLLSTÄNDIG und liefere alle Metadaten, Branche, Titel-Prüfung und KO-Check in\
-  \ EINEM JSON.\n\n== SEITENTITEL ==\n{page_title}\n\n== SEITENINHALT (Anfang) ==\n\
-  {page_text}\n\n== URL ==\n{url}\n\n== KANDIDATENPROFIL ==\n{candidate_profile}\n\
-  \n== AUSSCHLUSSKRITERIEN ==\n- Gesperrte Unternehmen: {excluded_companies}\n- Verbotene\
-  \ Jobtitel: {forbidden_titles}\n- Sicherheitsfreigaben: {clearance_keywords}\n\
-  - Pflichtzertifikate: {mandatory_certifications}\n- Spam-Bildungsanbieter: {spam_keywords}\n\
-  - Datacenter: {datacenter_keywords}\n- Min. Gehalt: {min_salary} EUR\n- Sprachen:\
-  \ Deutsch {candidate_german}, Englisch {candidate_english}\n\n== BEREITS BEWORBEN\
-  \ ==\n{previous_applications}\n\nAUFGABEN:\n1. Seitenvalidität prüfen (Dead-Link?\
-  \ Suchseite? 404?)\n2. Firmenname und Jobtitel extrahieren + bereinigen\n3. Branche\
-  \ bestimmen (IT/Handwerk/Allgemein)\n4. Jobtitel gegen Senioritätslevel prüfen:\n\
-  \   - IT-Junior: Blockiere Senior, Middle, Lead, Architect, Principal, Head of,\
-  \ Full Stack Dev, Consultant, Helpdesk\n   - Handwerk-Expert: Erlaube alle Handwerk-Titel\n\
-  \   - Global: Blockiere Projektmanager, Sales, Marketing Manager, HR\n5. Duplikate\
-  \ mit bisherigen Bewerbungen prüfen\n6. KO-Filter prüfen\n\nAntworte NUR mit diesem\
-  \ JSON (kein Markdown):\n{{\n  \"is_valid_job\": true,\n  \"invalid_reason\": null,\n\
-  \  \"company_name\": \"Firmenname ohne Rechtsform\",\n  \"job_title\": \"Berufsbezeichnung\"\
-  ,\n  \"industry\": \"IT\",\n  \"industry_reasoning\": \"Begründung\",\n  \"forbidden_title_detected\"\
-  : false,\n  \"forbidden_title_reason\": null,\n  \"is_duplicate\": false,\n  \"\
-  duplicate_of\": null,\n  \"ko_triggered\": false,\n  \"ko_reason\": null\n}}"
-classify_document_prompt: "Klassifiziere das folgende Dokument anhand von Dateiname\
-  \ und Textinhalt.\n\nDateiname: {filename}\nErste 1500 Zeichen des Textes:\n{doc_text}\n\
-  \nKategorien:\n- \"Lebenslauf\": CV, Curriculum Vitae, Werdegang\n- \"Anschreiben\"\
-  : Bewerbungsschreiben, Cover Letter\n- \"Arbeitszeugnis\": Arbeitsbescheinigung\n\
-  - \"Zertifikat\": Fortbildungsnachweis, Certificate\n- \"Diplom\": Abschlusszeugnis,\
-  \ Bachelor/Master-Urkunde, Schulzeugnis\n- \"Sonstiges\": Andere Dokumente\n\n\
-  Antworte NUR mit JSON (kein Markdown):\n{{\n  \"classification\": \"Lebenslauf\"\
-  ,\n  \"confidence\": 0.95,\n  \"reasoning\": \"Begründung\"\n}}"
+  Gib NUR das reine JSON-Dokument zurück (eine Liste von Aktionen), ohne Erklärungen oder Markdown-Tags.'
+scoring_prompt: "Vergleiche das Kandidatenprofil mit der Stellenbeschreibung (Job Description). Bewerte das Match auf einer Skala von 0 bis 10.\n\nKandidatenprofil:\n{candidate_profile}\n\nStellenbeschreibung:\n\
+  {job_description}\n{rejections_str}\n\nKO-Kriterien (MÜSSEN geprüft werden):\n- Sicherheitsfreigaben: {clearance_keywords}\n- Pflichtzertifikate: {certifications}\n- Bildungsanbieter: {spam_keywords}\n\
+  - Datacenter: {datacenter_keywords}\n- Mindestgehalt: {min_salary} EUR\n- Sprachen: Deutsch {candidate_german}, Englisch {candidate_english}\n- Berufserfahrung seit: {career_start_year}\n\nBewertungskriterien:\n\
+  1. Hard Skills (max 4.0)\n2. Erfahrung/Seniorität (max 3.0)\n3. Sprachen (max 2.0)\n4. Standort (max 1.0)\n\nPflichtkompetenzen: {mandatory_skills}\n\nGib NUR das reine JSON-Dokument zurück:\n{{\n  \"\
+  scores\": {{\"hard_skills\": 0.0, \"experience\": 0.0, \"languages\": 0.0, \"location\": 0.0}},\n  \"total_score\": 0.0,\n  \"reasoning\": \"Begründung\",\n  \"ko_criterion_triggered\": false\n}}"
+scoring_prompt_IT: "Du bist ein erfahrener IT-Recruiter in Deutschland. Vergleiche das Kandidatenprofil mit der Stellenbeschreibung.\n\nKandidatenprofil:\n{candidate_profile}\n\nStellenbeschreibung:\n{job_description}\n\
+  {rejections_str}\n\nRegeln:\n1. Mindestgehalt: unter {min_salary} EUR → Score 0.\n2. Sprachen: Deutsch {candidate_german}, Englisch {candidate_english}.\n3. KO: Sicherheitsfreigaben ({clearance_keywords}),\
+  \ Zertifikate ({certifications}), Bildungsanbieter ({spam_keywords}), Datacenter ({datacenter_keywords}).\n4. Full Stack Developer / Consultant / Support → Score 0.\n5. Berufserfahrung seit {career_start_year}.\n\
+  \nPflichtkompetenzen: {mandatory_skills}\n\nGib NUR JSON zurück:\n{{\n  \"total_score\": 0.0,\n  \"ko_criterion_triggered\": false,\n  \"reasoning\": \"Begründung\"\n}}"
+extract_recruiter_prompt: 'Extrahiere den vollständigen Namen des Recruiters/Ansprechpartners aus der folgenden Stellenbeschreibung.
+
+
+  Der E-Mail-Kontakt für Bewerbungen ist: {email}
+
+
+  Stellenbeschreibung:
+
+  {job_text}
+
+
+  Gib NUR den Namen zurück (z.B. "Max Mustermann"). Wenn kein Name gefunden wird, gib eine leere Zeile zurück.'
+job_intake_prompt: "Du bist ein Job-Intake-Analyst. Analysiere eine Stellenanzeige VOLLSTÄNDIG und liefere alle Metadaten, Branche, Titel-Prüfung und KO-Check in EINEM JSON.\n\n== SEITENTITEL ==\n{page_title}\n\
+  \n== SEITENINHALT (Anfang) ==\n{page_text}\n\n== URL ==\n{url}\n\n== KANDIDATENPROFIL ==\n{candidate_profile}\n\n== AUSSCHLUSSKRITERIEN ==\n- Gesperrte Unternehmen: {excluded_companies}\n- Verbotene Jobtitel:\
+  \ {forbidden_titles}\n- Sicherheitsfreigaben: {clearance_keywords}\n- Pflichtzertifikate: {mandatory_certifications}\n- Spam-Bildungsanbieter: {spam_keywords}\n- Datacenter: {datacenter_keywords}\n- Min.\
+  \ Gehalt: {min_salary} EUR\n- Sprachen: Deutsch {candidate_german}, Englisch {candidate_english}\n\n== BEREITS BEWORBEN ==\n{previous_applications}\n\nAUFGABEN:\n1. Seitenvalidität prüfen (Dead-Link?\
+  \ Suchseite? 404?)\n2. Firmenname und Jobtitel extrahieren + bereinigen\n3. Branche bestimmen (IT/Handwerk/Allgemein)\n4. Jobtitel gegen Senioritätslevel prüfen:\n   - IT-Junior: Blockiere Senior, Middle,\
+  \ Lead, Architect, Principal, Head of, Full Stack Dev, Consultant, Helpdesk\n   - Handwerk-Expert: Erlaube alle Handwerk-Titel\n   - Global: Blockiere Projektmanager, Sales, Marketing Manager, HR\n5.\
+  \ Duplikate mit bisherigen Bewerbungen prüfen\n6. KO-Filter prüfen\n\nAntworte NUR mit diesem JSON (kein Markdown):\n{{\n  \"is_valid_job\": true,\n  \"invalid_reason\": null,\n  \"company_name\": \"\
+  Firmenname ohne Rechtsform\",\n  \"job_title\": \"Berufsbezeichnung\",\n  \"industry\": \"IT\",\n  \"industry_reasoning\": \"Begründung\",\n  \"forbidden_title_detected\": false,\n  \"forbidden_title_reason\"\
+  : null,\n  \"is_duplicate\": false,\n  \"duplicate_of\": null,\n  \"ko_triggered\": false,\n  \"ko_reason\": null\n}}"
+classify_document_prompt: "Klassifiziere das folgende Dokument anhand von Dateiname und Textinhalt.\n\nDateiname: {filename}\nErste 1500 Zeichen des Textes:\n{doc_text}\n\nKategorien:\n- \"Lebenslauf\"\
+  : CV, Curriculum Vitae, Werdegang\n- \"Anschreiben\": Bewerbungsschreiben, Cover Letter\n- \"Arbeitszeugnis\": Arbeitsbescheinigung\n- \"Zertifikat\": Fortbildungsnachweis, Certificate\n- \"Diplom\":\
+  \ Abschlusszeugnis, Bachelor/Master-Urkunde, Schulzeugnis\n- \"Sonstiges\": Andere Dokumente\n\nAntworte NUR mit JSON (kein Markdown):\n{{\n  \"classification\": \"Lebenslauf\",\n  \"confidence\": 0.95,\n\
+  \  \"reasoning\": \"Begründung\"\n}}"
