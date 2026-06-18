@@ -2015,7 +2015,7 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
     save_anschreiben_pdf(anschreiben_data, company_name, candidate_profile, anschreiben_pdf_path, browser_context=pdf_context)
     
     # Try direct email application if job text contains contact email
-    from job_agent.direct_email_applier import extract_contact_info, collect_relevant_attachments, send_direct_email
+    from job_agent.direct_email_applier import extract_contact_info, collect_relevant_attachments, send_direct_email, personalize_anschreiben
     if auto_approve and not no_email:
         
         contact = extract_contact_info(job_text)
@@ -2023,8 +2023,10 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
             print(f"{Colors.BLUE}Found contact email in job: {contact['email']}{Colors.END}")
             if contact.get("recruiter_name"):
                 print(f"{Colors.BLUE}Found recruiter name: {contact['recruiter_name']}. Personalizing Anschreiben...{Colors.END}")
-                # Update salutation in dict and rebuild full_text
+                # Personalize salutation in full_text and update dict for PDF
                 name = contact["recruiter_name"].strip().split('\n')[0].strip()
+                anschreiben_data["full_text"] = personalize_anschreiben(anschreiben_data.get("full_text", ""), name)
+                # Also update salutation for PDF rendering
                 nl = name.lower()
                 if nl.startswith("herr "):
                     anschreiben_data["salutation"] = f"Sehr geehrter {name[5:]},"
@@ -2032,7 +2034,6 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
                     anschreiben_data["salutation"] = f"Sehr geehrte {name[5:]},"
                 else:
                     anschreiben_data["salutation"] = f"Guten Tag {name},"
-                anschreiben_data["full_text"] = f"{anschreiben_data.get('subject', 'Bewerbung')}\n\n{anschreiben_data['salutation']}\n\n{anschreiben_data.get('body', '')}\n\n{anschreiben_data.get('closing', 'Mit freundlichen Grüßen')}"
                 try:
                     pdf_context = page.context
                 except Exception:
