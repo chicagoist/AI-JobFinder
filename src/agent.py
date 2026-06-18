@@ -605,12 +605,11 @@ def parse_cv(cv_path, output_json_path, criteria_path=None):
     prompt = f"""
     Du bist ein erfahrener Senior HR-Spezialist in Deutschland. Analysiere diesen Lebenslauf (CV) und erstelle ein konsolidiertes Profil.
     
-    WICHTIG: Der Kandidat hat ZWEI gleichwertige Karrierepfade:
-    1. IT-Bereich (Systemadmin, Cloud, Support, Programmierung).
-    2. Handwerklicher Bereich (Mechanische Montage, Schlosser, Instandhaltung).
-    Berücksichtige BEIDE Pfade in 'job_search_directions' und 'target_vacancies'. Verwerfe NICHT den mechanischen Werdegang!
+    WICHTIG: Extrahiere zu jedem Ausbildungseintrag (education) ein 'curriculum'-Feld mit den detaillierten Kursinhalten/Modulen, falls im Dokument beschrieben. Dies hilft später beim Scoring gegen Stellenanforderungen.
     
-    WICHTIG: Extrahiere zu jedem Ausbildungseintrag (education) ein 'curriculum'-Feld mit den detaillierten Kursinhalten/Modulen, falls im Dokument beschrieben (z.B. Serveradministration, Active Directory, Azure, PowerShell, etc.). Dies hilft später beim Scoring gegen Stellenanforderungen.
+    WICHTIG: STRENGE TRENNUNG VON EDUCATION UND EXPERIENCE. Extrahiere NUR explizite Arbeitsverhältnisse mit Firmenname als 'experience'. Ein Studium, eine Umschulung oder ein Kurs ist Bildung (education), NICHT Berufserfahrung. Inferiere NIEMALS Berufserfahrung aus Bildung.
+    
+    WICHTIG: Leite die 'job_search_directions' und 'target_vacancies' AUSSCHLIESSLICH aus den tatsächlich im Lebenslauf genannten Stationen, Fähigkeiten und Qualifikationen ab. Erfinde KEINE Karrierepfade. Wenn der Lebenslauf nur einen Bereich abdeckt, nenne NUR diesen Bereich.
     
     Hier ist der extrahierte Text des Lebenslaufs:
     --- START LEBENSLAUF ---
@@ -633,13 +632,14 @@ def parse_cv(cv_path, output_json_path, criteria_path=None):
       "languages": {{ "deutsch": "B2", "englisch": "A2", "ukrainisch": "Muttersprache", "russisch": "Muttersprache" }},
       "skills": [...],
       "experience_years": 0.0,
-      "seniority_level": "Junior IT / Erfahrener Handwerker",
+      "seniority_level": "...",
       "hr_assessment": {{
-        "job_search_directions": ["IT-Systemadministration", "Mechanische Montage / Handwerk"],
-        "target_vacancies": ["Junior IT Admin", "Schlosser", "Monteur", "IT Support"],
+        "job_search_directions": ["..."],
+        "target_vacancies": ["..."],
         "apply_to_learning_roles": true,
-        "strategic_advice": "Empfehlung für beide Bereiche..."
+        "strategic_advice": "..."
       }},
+      "experience": [{{ "title": "...", "company": "...", "years": "..." }}],
       "education": [...],
       "certifications": [...]
     }}
@@ -656,20 +656,6 @@ def parse_cv(cv_path, output_json_path, criteria_path=None):
     
     try:
         profile_data = json.loads(text)
-        
-        # Ensure mandatory skills are present in the profile
-        mandatory_skills = ["Java", "Perl", "Kommandozeile (Console)", "Künstliche Intelligenz (AI / LLM)"]
-        if criteria_path and os.path.exists(criteria_path):
-            try:
-                criteria = load_criteria(criteria_path)
-                mandatory_skills = criteria.get("cover_letter", {}).get("mandatory_skills", mandatory_skills)
-            except Exception as e:
-                print(f"Warning: could not load criteria from {criteria_path} during CV parsing: {e}")
-        if "skills" not in profile_data:
-            profile_data["skills"] = []
-        for skill in mandatory_skills:
-            if skill not in profile_data["skills"]:
-                profile_data["skills"].append(skill)
         
         # Normalize profile: fill first_name, last_name, address, city from name/location
         profile_data = normalize_profile(profile_data)
@@ -1347,8 +1333,77 @@ def check_local_ko_filters(job_text, criteria, candidate_profile):
 
     return None
 
+def detect_industry(job_title, job_description, candidate_profile=None):
+    text = (f"{job_title or ''} {job_description or ''}").lower()
+
+    it_keywords = [
+        "python", "java", "devops", "kubernetes", "docker", "aws", "azure",
+        "cloud", "ci/cd", "linux", "server", "cybersecurity", "software",
+        "full.?stack", "backend", "frontend", "api", "sql", "datenbank",
+        "entwickler", "developer", "administrator", "admin\\b", "netzwerk", "systemadmin",
+        "systemintegrator", "fachinformatiker", "informatiker", "informatik",
+        "softwareentwickler", "programmierer", "anwendungsbetreuer",
+        "data.?science", "machine.?learning", "cloud.?engineer", "devops.?engineer",
+        "\\bit\\b", "it-support", "it-sicherheit", "it-spezialist", "it-servicedesk",
+        "system.?engineer", "software.?engineer", "service.?desk",
+        "exchange", "windows", "microsoft", "vmware", "help.?desk", "ticket",
+        "powershell", "script", "automation", "firewall", "router", "switch",
+        "active.?directory", "sap", "oracle",
+    ]
+    handwerk_keywords = [
+        "schlosser", "elektriker", "elektroniker", "shk", "sanitär",
+        "heizung", "klima", "wärmepumpe", "dachdecker", "zimmerer",
+        "maurer", "metallbauer", "tischler", "schreiner",
+        "maler", "lackierer", "kfz", "mechatroniker", "cnc",
+        "schweißen", "pv-anlage", "photovoltaik", "energietechnik",
+        "handwerk", "reparatur", "wartung", "installation",
+        "anlagenmechaniker", "gebäude", "montage",
+        "galvanik", "galvanisieren", "beschichtung", "oberflächentechnik",
+        "metallverarbeitung", "produktion", "fertigung", "werkzeug",
+        "maschinenbau", "industriemechaniker", "feinwerk",
+        "sicherheitstechnik", "steuerungstechnik", "automatisierungstechnik",
+        "elektro", "lüftung", "brandschutz", "servicetechniker",
+    ]
+    allgemein_keywords = [
+        "lehrer", "erzieher", "dozent", "trainer", "ausbilder",
+        "pädagoge", "sozial", "büro", "verwaltung", "assistent",
+        "sekretär", "buchhaltung", "personal", "hr\\b", "recruiting",
+        "vertrieb", "kundenberater", "marketing", "einkauf",
+        "lager", "logistik", "fahrer", "reinigung", "hauswirtschaft",
+        "küche", "kundenservice", "servicekraft", "servicepersonal", "dienstleistung", "beratung", "management.?assistant",
+        "pflege", "krankenpflege", "arzt", "therapeut",
+        "kinder", "betreuung", "childcare",
+    ]
+
+    def count_matches(keywords, search_text=None):
+        src = search_text if search_text is not None else text
+        return sum(1 for kw in keywords if re.search(kw, src, re.IGNORECASE))
+
+    it_score = count_matches(it_keywords)
+    handwerk_score = count_matches(handwerk_keywords)
+    allgemein_score = count_matches(allgemein_keywords)
+
+    scores = {"IT": it_score, "Handwerk": handwerk_score, "Allgemein": allgemein_score}
+    sorted_scores = sorted(scores.items(), key=lambda x: -x[1])
+    best = sorted_scores[0]
+
+    if best[1] >= 2 and best[1] >= sorted_scores[1][1] + 2:
+        return best[0]
+
+    if best[1] == 0 and candidate_profile:
+        cv_text_lower = str(candidate_profile).lower()
+        cv_it = count_matches(it_keywords, cv_text_lower)
+        cv_handwerk = count_matches(handwerk_keywords, cv_text_lower)
+        cv_allgemein = count_matches(allgemein_keywords, cv_text_lower)
+        cv_scores = {"IT": cv_it, "Handwerk": cv_handwerk, "Allgemein": cv_allgemein}
+        cv_best = sorted(cv_scores.items(), key=lambda x: -x[1])[0]
+        if cv_best[1] >= 2:
+            return cv_best[0]
+
+    return "Allgemein"
+
 # Score job description against the candidate profile
-def score_job(candidate_profile, job_description, config, criteria, past_rejections=None):
+def score_job(candidate_profile, job_description, config, criteria, past_rejections=None, industry="Allgemein", mandatory_skills=None):
     init_gemini()
     if criteria is None:
         criteria = load_criteria()
@@ -1361,18 +1416,6 @@ def score_job(candidate_profile, job_description, config, criteria, past_rejecti
     spam_keywords = criteria.get("ko_filters", {}).get("spam_providers", {}).get("blocked_keywords", [])
     career_start_year = criteria.get("cover_letter", {}).get("career_start_year", 2010)
     
-    industry = criteria.get("search", {}).get("industry", "IT")
-    industry_persona = {
-        "IT": "Du bist ein erfahrener IT-Recruiter in Deutschland.",
-        "Handwerk": "Du bist ein erfahrener Personalberater für Handwerk und Produktion in Deutschland.",
-        "Allgemein": "Du bist ein erfahrener Personalberater in Deutschland."
-    }.get(industry, "Du bist ein erfahrener Personalberater in Deutschland.")
-    industry_ko_rules = {
-        "IT": '- Full Stack Developer: Wenn die Stelle oder der Titel für einen Full Stack Developer, Fullstack-Entwickler oder Ähnliches ausgeschrieben ist, setze den Gesamtscore SOFORT auf 0 und ko_criterion_triggered auf true.\\n- Consultant oder Support-Titel: Wenn die Position "Consultant" oder "Support" im Titel führt (z.B. IT Consultant, Support Engineer), setze den Gesamtscore SOFORT auf 0 und ko_criterion_triggered auf true.',
-        "Handwerk": "",
-        "Allgemein": ""
-    }.get(industry, "")
-    
     rejections_str = ""
     if past_rejections:
         rejections_str = "\nBisherige Ablehnungsgründe des Kandidaten (vermeide Stellen mit ähnlichen Kriterien/Ausschlusskriterien):\n"
@@ -1380,7 +1423,12 @@ def score_job(candidate_profile, job_description, config, criteria, past_rejecti
             rejections_str += f"- {r}\n"
             
     print(f"{Colors.BLUE}Evaluating job description with Gemini Flash...{Colors.END}")
-    prompt = PROMPTS.get("scoring_prompt").format(
+    prompt_key = f"scoring_prompt_{industry}"
+    if prompt_key not in PROMPTS:
+        prompt_key = "scoring_prompt"
+    industry_skills_str = ", ".join(mandatory_skills) if mandatory_skills else "Keine"
+    print(f"  {Colors.GREY}Industry:{Colors.END} {Colors.CYAN}{industry}{Colors.END}  {Colors.GREY}Scoring prompt:{Colors.END} {Colors.CYAN}{prompt_key}{Colors.END}")
+    prompt = PROMPTS.get(prompt_key).format(
         candidate_profile=json.dumps(candidate_profile, ensure_ascii=False, indent=2),
         job_description=job_description,
         rejections_str=rejections_str,
@@ -1392,8 +1440,7 @@ def score_job(candidate_profile, job_description, config, criteria, past_rejecti
         min_salary=min_salary,
         spam_keywords=", ".join(spam_keywords),
         datacenter_keywords=", ".join(datacenter_keywords),
-        industry_persona=industry_persona,
-        industry_ko_rules=industry_ko_rules
+        mandatory_skills=industry_skills_str
     )
     try:
         response = llm_request_with_fallback(prompt)
@@ -1411,44 +1458,36 @@ def score_job(candidate_profile, job_description, config, criteria, past_rejecti
         return {"total_score": 0.0, "ko_criterion_triggered": True, "reasoning": "JSON parse error"}
 
 # Generate cover letter text
-def generate_anschreiben(candidate_profile, job_description, config, criteria=None):
+def generate_anschreiben(candidate_profile, job_description, config, criteria=None, cv_text=None, industry="Allgemein", mandatory_skills=None):
     print(f"{Colors.BLUE}Drafting Anschreiben with Gemini Flash...{Colors.END}")
     init_gemini()
 
     if criteria is None:
         criteria = load_criteria()
     career_start_year = criteria.get("cover_letter", {}).get("career_start_year", 2010)
-    mandatory_skills = criteria.get("cover_letter", {}).get("mandatory_skills", ["Java", "Perl", "Kommandozeile (Console)", "Künstliche Intelligenz (AI / LLM)"])
     
-    industry = criteria.get("search", {}).get("industry", "IT")
-    experience_years = candidate_profile.get("experience_years", 25)
-    career_context_map = {
-        "IT": f'- IT-Erfahrung: Relevanter IT-Werdegang begann im Jahr {career_start_year}. Formuliere seine Erfahrung präzise und übertreibe nicht (nicht \"30 Jahre IT-Erfahrung\" schreiben, da dies irreführend ist; er war zuvor Industriemechaniker).',
-        "Handwerk": f'- Berufserfahrung: Der Kandidat verfügt über langjährige Erfahrung im Handwerk (Industriemechanik, Montage, Instandhaltung) sowie neuere IT-Kenntnisse aus Weiterbildungen. Formuliere seine Erfahrung präzise und wahrheitsgemäß.',
-        "Allgemein": f'- Berufserfahrung: Der Kandidat verfügt über ca. {experience_years} Jahre Berufserfahrung. Stelle seine Erfahrung je nach Stellenprofil dar.'
-    }
-    career_context = career_context_map.get(industry, career_context_map["IT"])
-    industry_skills_context_map = {
-        "IT": f"- Der Wert \"experience_years\" (ca. 30 Jahre) bezieht sich auf die gesamte berufliche Laufbahn (inkl. früherer technischer Berufe wie Industriemechaniker). Seine IT-Erfahrung (Netzwerke, Linux-Administration) begann als Freelancer ab {career_start_year} (bzw. intensiviert durch aktuelle Weiterbildungen ab 2025). Stelle seine IT-Erfahrung wahrheitsgemäß dar (z.B. \"mit meiner langjährigen Erfahrung in der Web-Systemadministration seit {career_start_year}...\" oder \"als angehender IT-Administrator...\"). Behaupte auf keinen Fall, dass er 30 Jahre IT-Erfahrung hat!",
-        "Handwerk": f"- Der Wert \"experience_years\" (ca. 30 Jahre) umfasst sowohl langjährige Tätigkeit im Handwerk (Industriemechanik, Montage) als auch neuere IT-Weiterbildungen. Stelle die relevante Erfahrung je nach Stellenprofil dar und übertreibe nicht.",
-        "Allgemein": f"- Der Wert \"experience_years\" (ca. 30 Jahre) umfasst die gesamte berufliche Laufbahn. Orientiere dich bei der Darstellung an den Anforderungen der Stelle."
-    }
-    industry_skills_context = industry_skills_context_map.get(industry, industry_skills_context_map["IT"])
+    if mandatory_skills is None:
+        industry_cfg = criteria.get("industries", {}).get(industry, {})
+        mandatory_skills = industry_cfg.get("cover_letter", {}).get("mandatory_skills", [])
+    
+    prompt_key = f"cover_letter_prompt_{industry}"
+    if prompt_key not in PROMPTS:
+        prompt_key = "cover_letter_prompt"
+    print(f"  {Colors.GREY}Industry:{Colors.END} {Colors.CYAN}{industry}{Colors.END}  {Colors.GREY}Cover letter prompt:{Colors.END} {Colors.CYAN}{prompt_key}{Colors.END}")
     
     salary_exp = config["defaults"].get("salary_expectation", "nach Vereinbarung")
     availability = config["defaults"].get("availability", "sofort")
     candidate_german = config["criteria"].get("german_level", "B1")
     
-    prompt = PROMPTS.get("cover_letter_prompt").format(
+    prompt = PROMPTS.get(prompt_key).format(
         candidate_profile=json.dumps(candidate_profile, ensure_ascii=False, indent=2),
         job_description=job_description,
+        cv_text=cv_text or "Nicht verfügbar",
         salary_exp=salary_exp,
         availability=availability,
         candidate_german=candidate_german,
         career_start_year=career_start_year,
-        mandatory_skills=", ".join(mandatory_skills),
-        career_context=career_context,
-        industry_skills_context=industry_skills_context
+        mandatory_skills=", ".join(mandatory_skills)
     )
     response = llm_request_with_fallback(prompt)
     if response is None:
@@ -1596,24 +1635,30 @@ def save_anschreiben_pdf(anschreiben_text, company_name, candidate_profile, outp
             pdf_page.close()
             pdf_done = True
         except Exception as e:
-            print(f"{Colors.YELLOW}Warning: Direct PDF generation via active context failed ({e}). Falling back...{Colors.END}")
+            print(f"{Colors.YELLOW}Warning: Direct PDF generation via active context failed: {e}{Colors.END}")
             
     if not pdf_done:
         try:
-            with sync_playwright() as p:
-                # Fallback: launch separate headless browser instance
-                # This is more reliable as page.pdf() requires headless=True
-                browser = p.chromium.launch(headless=True)
-                pdf_page = browser.new_page()
-                pdf_page.set_content(html_content)
-                pdf_page.pdf(path=output_path, format="A4")
-                browser.close()
-                pdf_done = True
+            from concurrent.futures import ThreadPoolExecutor
+            from playwright.sync_api import sync_playwright
+            def _render_pdf():
+                with sync_playwright() as pw:
+                    browser = pw.chromium.launch(headless=True, args=["--no-sandbox"])
+                    pdf_page = browser.new_page()
+                    pdf_page.set_content(html_content)
+                    pdf_page.pdf(path=output_path, format="A4")
+                    pdf_page.close()
+                    browser.close()
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                pool.submit(_render_pdf).result(timeout=90)
+            pdf_done = True
         except Exception as e:
-            print(f"{Colors.RED}Error: Failed to generate PDF even with fallback: {e}{Colors.END}")
-            
+            print(f"{Colors.YELLOW}Warning: Could not generate PDF even with separate thread: {e}{Colors.END}")
+        
     if pdf_done:
         print(f"{Colors.GREEN}Successfully generated PDF Cover Letter at '{output_path}'{Colors.END}")
+    else:
+        print(f"{Colors.YELLOW}Warning: Continuing without PDF for this application.{Colors.END}")
 
 def get_browser_info():
     """Find installed Chrome/Chromium and return (executable_path, channel, user_data_dir_default)."""
@@ -1856,7 +1901,15 @@ def fill_page_form(page, candidate_profile, config, anschreiben_path, cv_path):
         }).filter(item => item.is_visible && (item.tag !== 'button' || item.text || item.aria_label));
     }
     """
-    elements = page.evaluate(js_script)
+    try:
+        elements = page.evaluate(js_script)
+    except AttributeError as ae:
+        print(f"{Colors.YELLOW}Form filler: page.evaluate() failed ({ae}). Trying main_frame.evaluate() fallback...{Colors.END}")
+        try:
+            elements = page.main_frame.evaluate(js_script)
+        except Exception as fe:
+            print(f"{Colors.YELLOW}Form filler: main_frame.evaluate() also failed: {fe}{Colors.END}")
+            return False
     
     init_gemini()
     
@@ -1911,7 +1964,7 @@ def fill_page_form(page, candidate_profile, config, anschreiben_path, cv_path):
     return actions_succeeded > 0
 
 # Process a job application URL
-def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_approve=False, criteria_path=None, tee=None, workspace_dir=None):
+def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_approve=False, criteria_path=None, tee=None, workspace_dir=None, no_email=False):
     if criteria_path is None:
         criteria_path = os.path.join(os.path.dirname(__file__), "config", "job_criteria.yaml")
     print(f"\n{Colors.GREY}{'='*80}{Colors.END}")
@@ -2050,13 +2103,15 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
             if text.endswith("```"): text = text[:-3]
             meta = json.loads(text.strip())
             if company_name == "Unbekannt":
-                company_name = meta.get("company_name", "Unbekannt")
+                company_name = meta.get("company_name") or "Unbekannt"
             if job_title == "Unbekannt":
-                job_title = meta.get("job_title", "Unbekannt")
+                job_title = meta.get("job_title") or "Unbekannt"
         except Exception:
             if job_title == "Unbekannt":
                 job_title = page_title[:50]
                 
+    company_name = company_name or "Unbekannt"
+    job_title = job_title or "Unbekannt"
     print(f"  {Colors.GREY}Company:{Colors.END} {Colors.CYAN}{company_name}{Colors.END}")
     print(f"  {Colors.GREY}Job Title:{Colors.END} {Colors.CYAN}{job_title}{Colors.END}")
     
@@ -2082,7 +2137,11 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
         print(f"{Colors.GREY}{'='*80}{Colors.END}\n")
         return
 
-        
+    # Detect industry per job (IT/Allgemein/Handwerk) with Allgemein as default
+    industry = detect_industry(job_title, job_text, candidate_profile)
+    industry_cfg = criteria.get("industries", {}).get(industry, {})
+    mandatory_skills = industry_cfg.get("cover_letter", {}).get("mandatory_skills", [])
+    
     # Score job
     past_rejections = get_past_rejections(conn)
     yaml_rejections = criteria.get("ko_filters", {}).get("user_rejected_reasons", [])
@@ -2097,10 +2156,10 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
             "reasoning": f"Local K.O. filter: {local_ko_reason}"
         }
     else:
-        score_data = score_job(candidate_profile, job_text, config, criteria, past_rejections)
+        score_data = score_job(candidate_profile, job_text, config, criteria, past_rejections, industry=industry, mandatory_skills=mandatory_skills)
     total_score = score_data.get("total_score", 0.0)
     
-    min_score = criteria.get("scoring", {}).get("min_score_to_apply", 8.0)
+    min_score = industry_cfg.get("scoring", {}).get("min_score_to_apply", 8.0)
     is_ko = score_data.get("ko_criterion_triggered", False)
     if total_score >= min_score and not is_ko:
         print(f"  {Colors.GREY}Match Score:{Colors.END} {Colors.GREEN}{Colors.BOLD}{total_score}/10 (PASSED){Colors.END}")
@@ -2115,17 +2174,35 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
         return
         
     # Generate Cover Letter
-    anschreiben_text = generate_anschreiben(candidate_profile, job_text, config, criteria)
+    cv_text_raw = "Nicht verfügbar"
+    try:
+        cv_name = config["user_profile"].get("cv_path", "Lebenslauf_UserName.pdf")
+        cv_file_path = os.path.join(os.path.dirname(__file__), cv_name)
+        if os.path.exists(cv_file_path):
+            import fitz
+            doc = fitz.open(cv_file_path)
+            cv_text_raw = ""
+            for page in doc:
+                cv_text_raw += page.get_text()
+            doc.close()
+            cv_text_raw = cv_text_raw.strip()
+    except Exception as e:
+        print(f"{Colors.YELLOW}Warning: Could not read CV PDF for Anschreiben: {e}{Colors.END}")
+    anschreiben_text = generate_anschreiben(candidate_profile, job_text, config, criteria, cv_text=cv_text_raw, industry=industry, mandatory_skills=mandatory_skills)
     
     output_dir = os.path.join(os.path.dirname(__file__), "output")
     safe_company_name = "".join([c for c in company_name if c.isalnum() or c in (" ", "_")]).strip().replace(" ", "_")
     anschreiben_pdf_path = os.path.join(output_dir, f"Anschreiben_{safe_company_name}.pdf")
     
-    save_anschreiben_pdf(anschreiben_text, company_name, candidate_profile, anschreiben_pdf_path, browser_context=page.context)
+    try:
+        pdf_context = page.context
+    except Exception:
+        pdf_context = None
+    save_anschreiben_pdf(anschreiben_text, company_name, candidate_profile, anschreiben_pdf_path, browser_context=pdf_context)
     
     # Try direct email application if job text contains contact email
     from job_agent.direct_email_applier import extract_contact_info, personalize_anschreiben, collect_relevant_attachments, send_direct_email
-    if auto_approve:
+    if auto_approve and not no_email:
         
         contact = extract_contact_info(job_text)
         if contact and contact.get("email"):
@@ -2133,7 +2210,11 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
             if contact.get("recruiter_name"):
                 print(f"{Colors.BLUE}Found recruiter name: {contact['recruiter_name']}. Personalizing Anschreiben...{Colors.END}")
                 anschreiben_text = personalize_anschreiben(anschreiben_text, contact["recruiter_name"])
-                save_anschreiben_pdf(anschreiben_text, company_name, candidate_profile, anschreiben_pdf_path, browser_context=page.context)
+                try:
+                    pdf_context = page.context
+                except Exception:
+                    pdf_context = None
+                save_anschreiben_pdf(anschreiben_text, company_name, candidate_profile, anschreiben_pdf_path, browser_context=pdf_context)
             
             attachments = collect_relevant_attachments(conn, job_text, anschreiben_pdf_path, workspace_dir)
             success = send_direct_email(
@@ -2167,11 +2248,24 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
     cv_name = config["user_profile"].get("cv_path", "Lebenslauf_UserName.pdf")
     cv_path = os.path.join(os.path.dirname(__file__), cv_name)
     
-    form_filled = fill_page_form(page, candidate_profile, config, anschreiben_pdf_path, cv_path)
+    try:
+        form_filled = fill_page_form(page, candidate_profile, config, anschreiben_pdf_path, cv_path)
+    except Exception as e:
+        print(f"{Colors.YELLOW}Form filler failed: {e}{Colors.END}")
+        form_filled = False
     
-    if not form_filled and "linkedin.com" in page.url.lower():
-        print(f"{Colors.YELLOW}Form filler got 0 actions on LinkedIn. Trying Easy Apply...{Colors.END}")
-        form_filled = try_linkedin_easy_apply(page, candidate_profile, config, anschreiben_pdf_path, cv_path)
+    if not form_filled:
+        try:
+            is_linkedin = "linkedin.com" in page.url.lower()
+        except Exception:
+            is_linkedin = False
+        if is_linkedin:
+            print(f"{Colors.YELLOW}Form filler got 0 actions on LinkedIn. Trying Easy Apply...{Colors.END}")
+            try:
+                form_filled = try_linkedin_easy_apply(page, candidate_profile, config, anschreiben_pdf_path, cv_path)
+            except Exception as e:
+                print(f"{Colors.YELLOW}LinkedIn Easy Apply failed: {e}{Colors.END}")
+                form_filled = False
     
     if auto_approve:
         if form_filled:
@@ -2266,6 +2360,17 @@ def search_indeed(page, keywords, location="Deutschland", radius=25):
     except Exception as e:
         print(f"{Colors.YELLOW}Warning: page.goto to Indeed took too long or failed: {e}. Trying to proceed anyway...{Colors.END}")
     
+    # Fill the "Was?" search field explicitly so it's visible to the user
+    try:
+        page.wait_for_timeout(1000)
+        what_input = page.locator("#text-input-what")
+        if what_input.is_visible():
+            current_val = what_input.input_value()
+            if not current_val or current_val.strip() == "":
+                what_input.fill(keywords)
+    except Exception:
+        pass
+    
     try:
         page.wait_for_selector(".job_seen_beacon", timeout=8000)
     except Exception:
@@ -2305,17 +2410,19 @@ def search_indeed(page, keywords, location="Deutschland", radius=25):
                     break
             else:
                 print(f"{Colors.YELLOW}Warning: Timeout waiting for Indeed job cards after Cloudflare prompt. The page might be blocked or empty.{Colors.END}")
-                os.makedirs("output", exist_ok=True)
+                output_dir = os.path.join(os.path.dirname(__file__), "output")
+                os.makedirs(output_dir, exist_ok=True)
                 try:
-                    page.screenshot(path="output/indeed_search_error.png")
+                    page.screenshot(path=os.path.join(output_dir, "indeed_search_error.png"))
                 except Exception:
                     pass
                 return []
         else:
             print(f"{Colors.YELLOW}Warning: Timeout waiting for Indeed job cards. The page might be blocked or empty.{Colors.END}")
-            os.makedirs("output", exist_ok=True)
+            output_dir = os.path.join(os.path.dirname(__file__), "output")
+            os.makedirs(output_dir, exist_ok=True)
             try:
-                page.screenshot(path="output/indeed_search_error.png")
+                page.screenshot(path=os.path.join(output_dir, "indeed_search_error.png"))
             except Exception:
                 pass
             return []
@@ -2417,13 +2524,15 @@ def search_linkedin(page, keywords, location="Germany", radius=25):
                     break
             else:
                 print(f"{Colors.YELLOW}Warning: Timeout waiting for LinkedIn job cards.{Colors.END}")
-                os.makedirs("output", exist_ok=True)
-                page.screenshot(path="output/linkedin_search_error.png")
+                output_dir = os.path.join(os.path.dirname(__file__), "output")
+                os.makedirs(output_dir, exist_ok=True)
+                page.screenshot(path=os.path.join(output_dir, "linkedin_search_error.png"))
                 return []
         else:
             print(f"{Colors.YELLOW}Warning: Timeout waiting for LinkedIn job cards.{Colors.END}")
-            os.makedirs("output", exist_ok=True)
-            page.screenshot(path="output/linkedin_search_error.png")
+            output_dir = os.path.join(os.path.dirname(__file__), "output")
+            os.makedirs(output_dir, exist_ok=True)
+            page.screenshot(path=os.path.join(output_dir, "linkedin_search_error.png"))
             return []
         
     try:
@@ -2474,6 +2583,7 @@ def main():
     parser.add_argument("--reset-candidate", action="store_true", help="Clean candidate files and return settings to default stubs")
     parser.add_argument("--send-email", action="store_true", help="Send email summaries for all successfully applied jobs")
     parser.add_argument("--headless", action="store_true", help="Run Chrome in headless mode (no visible browser window)")
+    parser.add_argument("--no-email", action="store_true", help="Skip direct email sending to employers during testing")
     
     args = parser.parse_args()
     
@@ -2575,6 +2685,12 @@ def main():
     if cv_row:
         profile = json.loads(cv_row[1])
         profile = normalize_profile(profile)
+        # Sync candidate_profile.json with DB profile (ensure single source of truth)
+        try:
+            with open(profile_path, "w", encoding="utf-8") as pf:
+                json.dump(profile, pf, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"{Colors.YELLOW}Warning: could not sync candidate_profile.json: {e}{Colors.END}")
     else:
         if len(sys.argv) == 1 and not os.path.exists(profile_path):
             parse_cv(cv_path, profile_path, criteria_path)
@@ -2641,7 +2757,8 @@ def main():
                         auto_approve=args.auto_approve,
                         criteria_path=criteria_path,
                         tee=tee,
-                        workspace_dir=workspace_dir
+                        workspace_dir=workspace_dir,
+                        no_email=args.no_email
                     )
             elif args.interactive:
                 print(f"{Colors.MAGENTA}Interactive mode started. Type 'exit' to quit.{Colors.END}")
@@ -2663,7 +2780,8 @@ def main():
                                 auto_approve=args.auto_approve,
                                 criteria_path=criteria_path,
                                 tee=tee,
-                                workspace_dir=workspace_dir
+                                workspace_dir=workspace_dir,
+                                no_email=args.no_email
                             )
                     except Exception as e:
                         print(f"{Colors.RED}Error processing URL: {e}{Colors.END}")
@@ -2683,7 +2801,7 @@ def main():
                     elif raw_loc.lower() in ("deutschland", "germany"):
                         linkedin_loc = "Germany"
                     else:
-                        linkedin_loc = raw_loc
+                        linkedin_loc = f"{raw_loc}, Germany"
                     try:
                         linkedin_links = search_linkedin(search_page, search_query, linkedin_loc, args.radius)
                     except Exception as e:
@@ -2724,16 +2842,34 @@ def main():
                                     auto_approve=args.auto_approve,
                                     criteria_path=criteria_path,
                                     tee=tee,
-                                    workspace_dir=workspace_dir
+                                    workspace_dir=workspace_dir,
+                                    no_email=args.no_email
                                 )
                         except Exception as e:
                             print(f"{Colors.RED}Error processing job at {url}: {e}{Colors.END}")
                 else:
                     # Non-headless mode: reuse one page, keep it open
                     processing_page = context.new_page()
+                    processing_page.set_default_timeout(120000)
+                    browser_dead = False
                     for idx, url in enumerate(all_links):
+                        if browser_dead:
+                            print(f"{Colors.RED}Skipping remaining jobs — browser connection lost.{Colors.END}")
+                            break
                         print(f"\n{Colors.MAGENTA}{Colors.BOLD}>>> Processing vacancy {idx+1}/{len(all_links)}...{Colors.END}")
                         try:
+                            # Recreate page if it was closed by a previous error
+                            try:
+                                processing_page.title()
+                            except Exception:
+                                print(f"{Colors.YELLOW}Warning: Processing page was closed. Creating a new page...{Colors.END}")
+                                try:
+                                    processing_page = context.new_page()
+                                    processing_page.set_default_timeout(120000)
+                                except Exception:
+                                    print(f"{Colors.RED}Fatal: Cannot create new page — browser connection lost.{Colors.END}")
+                                    browser_dead = True
+                                    break
                             with TeeStdout() as tee:
                                 process_job_url(
                                     processing_page,
@@ -2745,10 +2881,16 @@ def main():
                                     auto_approve=args.auto_approve,
                                     criteria_path=criteria_path,
                                     tee=tee,
-                                    workspace_dir=workspace_dir
+                                    workspace_dir=workspace_dir,
+                                    no_email=args.no_email
                                 )
                         except Exception as e:
+                            estr = str(e)
                             print(f"{Colors.RED}Error processing job at {url}: {e}{Colors.END}")
+                            # Detect browser disconnection — any further Playwright call will fail
+                            if any(kw in estr.lower() for kw in ["epipe", "target page, context or browser has been closed", "connection", "browser has been closed", "protocol error", "socket"]):
+                                print(f"{Colors.RED}{Colors.BOLD}Browser connection lost. Remaining jobs will be skipped.{Colors.END}")
+                                browser_dead = True
             
             # Close browser context only if we launched it (not CDP)
             if not cdp_connected:

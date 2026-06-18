@@ -194,7 +194,21 @@ def retry_single(db_id: int) -> int:
         print(f"{Colors.RED}Failed to import agent.py: {e}{Colors.END}")
         return 1
 
-    ans_text = generate_anschreiben(candidate_profile, job_text, config)
+    cv_text_raw = "Nicht verfügbar"
+    try:
+        cv_name = config["user_profile"].get("cv_path", "Lebenslauf_UserName.pdf")
+        cv_file_path = os.path.join(os.path.dirname(__file__), cv_name)
+        if os.path.exists(cv_file_path):
+            import fitz
+            doc = fitz.open(cv_file_path)
+            cv_text_raw = ""
+            for page in doc:
+                cv_text_raw += page.get_text()
+            doc.close()
+            cv_text_raw = cv_text_raw.strip()
+    except Exception as e:
+        print(f"{Colors.YELLOW}Warning: Could not read CV PDF for Anschreiben: {e}{Colors.END}")
+    ans_text = generate_anschreiben(candidate_profile, job_text, config, cv_text=cv_text_raw)
     if not ans_text:
         print(f"{Colors.RED}Failed to generate Anschreiben.{Colors.END}")
         return 1

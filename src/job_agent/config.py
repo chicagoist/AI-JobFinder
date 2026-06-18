@@ -8,29 +8,32 @@ from job_agent.utils import Colors
 
 # Default Prompt Templates used by the agent
 DEFAULT_PROMPTS = {
-    "scoring_prompt": """Du bist ein erfahrener IT-Recruiter in Deutschland. Vergleiche das Kandidatenprofil mit der Stellenbeschreibung (Job Description).
+    "scoring_prompt_IT": """Du bist ein erfahrener IT-Recruiter in Deutschland. Vergleiche das Kandidatenprofil mit der Stellenbeschreibung (Job Description).
+
+Kandidatenprofil (JSON):
+{candidate_profile}
+
 Bewerte das Match auf einer Skala von 0 bis 10.
 
-Ein Score von 10 bedeutet perfekte Übereinstimmung. Ein Score von 0 bedeutet, dass K.O.-Kriterien greifen oder die Rolle absolut unpassend ist (z.B. Full Stack Entwickler).
+Ein Score von 10 bedeutet perfekte Übereinstimmung. Ein Score von 0 bedeutet, dass K.O.-Kriterien greifen oder die Rolle absolut unpassend ist.
 
 Du MUSST die folgenden Regeln strikt anwenden:
 1. Mindestgehalt: Wenn das in der Anzeige erwähnte Jahresgehalt unter {min_salary} € liegt, setze den Score auf 0 und ko_criterion_triggered auf true.
 2. Sprachen:
-    - Der Kandidat besitzt Deutschkenntnisse auf dem Niveau {candidate_german} (B2). Wenn die Stelle Deutsch C1, C2 oder "verhandlungssicher" voraussetzt (auch ohne explizite "Muss"-Formulierung), setze den Score SOFORT auf 0 und ko_criterion_triggered auf true.
-   - Der Kandidat besitzt Englischkenntnisse auf dem Niveau {candidate_english} (A2). ACHTUNG — NUR "verhandlungssicher Englisch", "fließend Englisch", "fluent English", "excellent English", "English C1", "business fluent" lösen ein K.O. aus. "Gute Englischkenntnisse" / "good English" ist KEIN K.O. — nur Abzug in der Teilbewertung.
+    - Der Kandidat besitzt Deutschkenntnisse auf dem Niveau {candidate_german}. Wenn die Stelle Deutsch C1, C2 oder "verhandlungssicher" voraussetzt (auch ohne explizite "Muss"-Formulierung), setze den Score SOFORT auf 0 und ko_criterion_triggered auf true.
+   - Der Kandidat besitzt Englischkenntnisse auf dem Niveau {candidate_english}. ACHTUNG — NUR "verhandlungssicher Englisch", "fließend Englisch", "fluent English", "excellent English", "English C1", "business fluent" lösen ein K.O. aus.
 3. K.O.-Kriterien / Ausschlüsse:
    - U.S. Staatsbürgerschaft (U.S. citizenship), Sicherheitsfreigabe (Secret/Top Secret clearance) oder TESA-Status: Wenn eines davon erforderlich ist (z.B. {clearance_keywords}), setze den Score auf 0 und ko_criterion_triggered auf true.
    - Pflichtzertifikate: Wenn die Stelle Zertifizierungen wie Red Hat ({certifications}) zwingend voraussetzt und der Kandidat diese nicht hat, setze den Score auf 0.
-   - Bildungsanbieter / Weiterbildungsangebote: Wenn es sich bei dem Angebot um eine reine Umschulung, Ausbildung oder Weiterbildung von einem Bildungsanbieter (z.B. {spam_keywords}) handelt, die eine Schulung/Werbung statt einer regulären Arbeitsstelle ist, setze den Score auf 0 und ko_criterion_triggered auf true.
-    - Full Stack Rollen: Wenn der Titel "Full Stack Developer", "Fullstack Developer" oder ähnlich lautet, setze den Score auf 0 (Kandidat sucht Systemadministration oder reines Backend).
-   - Consultant oder Support Rollen: Wenn der Titel "Consultant" oder "Support" enthält (z.B. IT Consultant, Support Engineer), setze den Score SOFORT auf 0 und ko_criterion_triggered auf true.
-4. Akademischer Grad (Computer Science / Software Engineering Degree):
-   - Wenn ein akademisches IT-Studium zwingend und ohne Ausweichklausel ("oder vergleichbare Berufserfahrung") gefordert wird, setze den Score auf 0.
-5. Berufserfahrung (IT-Erfahrung seit {career_start_year}):
-   - Der Kandidat ist auf Junior-Ebene (Einstiegslevel). Wenn die Stelle mehr als 3 Jahre relevante Berufserfahrung verlangt, bewerte den Score niedrig oder setze ihn auf 0.
-6. Regionale Einschränkung (Format der Arbeit):
+   - Bildungsanbieter / Weiterbildungsangebote: Wenn es sich bei dem Angebot um eine reine Umschulung, Ausbildung oder Weiterbildung von einem Bildungsanbieter (z.B. {spam_keywords}) handelt, setze den Score auf 0 und ko_criterion_triggered auf true.
+   - Reine Rechenzentrums-/körperliche Arbeit: Falls die Stelle rein körperliche Rechenzentrumsarbeit wie Verkabelung, Server-Einbau betrifft (z.B. {datacenter_keywords}), setze den Score auf 0 und ko_criterion_triggered auf true.
+   - Full Stack Developer: Wenn der Titel "Full Stack Developer", "Fullstack Developer" oder ähnlich lautet, setze den Score auf 0.
+   - Consultant oder Support Rollen: Wenn der Titel "Consultant" oder "Support" enthält, setze den Score SOFORT auf 0 und ko_criterion_triggered auf true.
+4. Akademischer Grad: Wenn ein akademisches IT-Studium zwingend und ohne Ausweichklausel ("oder vergleichbare Berufserfahrung") gefordert wird, setze den Score auf 0.
+5. Berufserfahrung (IT-Erfahrung seit {career_start_year}): Der Kandidat ist auf Junior-Ebene. Wenn die Stelle mehr als 3 Jahre relevante Berufserfahrung verlangt, bewerte niedrig oder setze auf 0.
+6. Regionale Einschränkung:
    - Stellen vor Ort (On-site) in Frankfurt am Main, Hanau, Offenbach, Hessen (Umkreis bis 35 km) werden positiv bewertet.
-   - Stellen vor Ort (On-site) in anderen Regionen (z.B. Berlin, München, Hamburg) sind K.O. (Score 0).
+   - Stellen vor Ort in anderen Regionen (z.B. Berlin, München, Hamburg) sind K.O. (Score 0).
 
 {rejections_str}
 
@@ -43,8 +46,33 @@ Gib das Ergebnis ausschließlich als valides JSON-Objekt im folgenden Format zur
   "ko_criterion_triggered": false,
   "reasoning": "Detaillierte Begründung auf Deutsch, warum dieser Score vergeben wurde..."
 }}""",
-    "cover_letter_prompt": """Erstelle ein professionelles Anschreiben auf Deutsch für eine Bewerbung als Systemadministrator / DevOps / Cloud Engineer (Junior-Level) basierend auf dem Kandidatenprofil und der Stellenbeschreibung.
-Das Anschreiben MUSS den Standard DIN 5008 (Layout für Geschäftsbriefe) einhalten.
+    "scoring_prompt": """Vergleiche das Kandidatenprofil mit der Stellenbeschreibung (Job Description).
+
+Kandidatenprofil (JSON):
+{candidate_profile}
+
+Bewerte das Match auf einer Skala von 0 bis 10.
+
+Ein Score von 10 bedeutet perfekte Übereinstimmung. Ein Score von 0 bedeutet, dass K.O.-Kriterien greifen oder die Rolle absolut unpassend ist.
+
+Regeln:
+1. Mindestgehalt: Wenn das erwähnte Jahresgehalt unter {min_salary} € liegt, setze den Score auf 0 und ko_criterion_triggered auf true.
+2. Sprachen: Der Kandidat spricht Deutsch {candidate_german}, Englisch {candidate_english}. Passe die Bewertung an.
+3. K.O.-Kriterien: Prüfe Sicherheitsfreigaben ({clearance_keywords}), Zertifikate ({certifications}), Bildungsanbieter ({spam_keywords}).
+4. Berufserfahrung seit {career_start_year}. Bewerte entsprechend der Anforderungen.
+
+{rejections_str}
+
+Stellenbeschreibung:
+{job_description}
+
+Gib das Ergebnis als JSON zurück:
+{{
+  "total_score": 0.0,
+  "ko_criterion_triggered": false,
+  "reasoning": "Begründung"
+}}""",
+    "cover_letter_prompt": """Erstelle ein professionelles Anschreiben auf Deutsch basierend auf dem Kandidatenprofil und der Stellenbeschreibung.
 
 Kandidatenprofil:
 {candidate_profile}
@@ -52,29 +80,23 @@ Kandidatenprofil:
 Stellenbeschreibung:
 {job_description}
 
-Zusätzliche Vorgaben für das Anschreiben:
-- Gehaltsvorstellung: {salary_exp} € brutto pro Jahr (nicht verhandelbar).
+Zusätzliche Vorgaben:
+- Gehaltsvorstellung: {salary_exp} € brutto pro Jahr.
 - Verfügbarkeit / Eintrittstermin: {availability}.
-- Berufserfahrung in der IT: Seit {career_start_year} (bitte organisch einbinden).
-- Sprachniveau Deutsch: Der Kandidat spricht Deutsch auf dem Niveau {candidate_german} (bitte das Anschreiben sprachlich auf diesem Niveau halten, fehlerfrei, aber nicht übertrieben akademisch geschwollen).
-- Pflichtkompetenzen: Binde die folgenden Pflichtkompetenzen organisch in den Text ein (sie müssen im Anschreiben erwähnt werden): {mandatory_skills}.
-- Übersetzungs-Regel (Übersetzung von Fachbegriffen in geschäftliche HR-Mehrwerte):
-  Übersetze technische Begriffe oder rohe Skills aus dem Lebenslauf in konkrete geschäftliche Vorteile für den Personaler. Zum Beispiel:
-  * Statt nur "Docker, K8s" -> "modernisierte die Systemarchitektur für maximale Ausfallsicherheit und beschleunigte Deployment-Zyklen"
-  * Statt "Python Scripting" -> "automatisierte zeitintensive Routineaufgaben, was die Fehlerquote und Betriebskosten signifikant senkte"
-  * Statt "Azure Cloud" -> "optimierte Cloud-Ressourcen für kosteneffizienten Betrieb und hohe Verfügbarkeit"
+- Sprachniveau Deutsch: {candidate_german}.
+- Pflichtkompetenzen: {mandatory_skills}.
 
-Format des Geschäftsbriefs (DIN 5008):
-1. Absender (Kandidat: Name, E-Mail, Telefon, Anschrift).
-2. Empfänger (Unternehmen aus der Stellenbeschreibung, falls ermittelbar, sonst allgemein).
+Format (DIN 5008):
+1. Absender (Kandidat).
+2. Empfänger (Unternehmen).
 3. Datum (rechtsbündig).
-4. Betreffzeile: Fett gedruckt (z.B. **Bewerbung als Junior Systemadministrator** - Referenz falls vorhanden).
-5. Anrede (z.B. 'Sehr geehrte Damen und Herren' oder Name des Ansprechpartners falls bekannt).
-6. Brieftext (Einleitung, Bezug zur Stelle, Motivation, Kompetenzen & Mehrwert mit Übersetzungs-Regel, Gehalt & Eintritt, Schlusssatz).
-7. Grußformel (Mit freundlichen Grüßen).
-8. Unterschrift (gedruckter Name des Kandidaten).
+4. Betreffzeile (fett).
+5. Anrede.
+6. Brieftext (Einleitung, Motivation, Kompetenzen, Gehalt, Schluss).
+7. Grußformel.
+8. Unterschrift.
 
-Gib NUR den reinen Text des Anschreibens aus. Keine Erklärungen, kein Markdown-Wrapper.""",
+Gib NUR den Text des Anschreibens aus.""",
     "form_filler_prompt": """Du bist ein Assistent, der ein Webformular für eine Bewerbung ausfüllt. Analysiere die Liste der interaktiven Elemente (Inputs, Buttons, Uploads) und entscheide für jedes Element, welche Aktion auszuführen ist.
 Kandidatenprofil:
 {candidate_profile}
