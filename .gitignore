@@ -4,9 +4,13 @@ __pycache__/
 
 # Local chrome/playwright profiles
 temp_profile/
+temp_profile_test/
+temp_profile_test2/
+temp_profile_test3/
 browser-profile/
 src/chrome_data/
 src/chrome_data_Debug/
+src/User Data/
 src/C:*
 src/C:\*
 src/.mypy_cache/
