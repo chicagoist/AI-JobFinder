@@ -91,27 +91,6 @@ def personalize_anschreiben(text: str, recruiter_name: str) -> str:
     )
     return text
 
-def is_document_relevant(parsed_json_str: str, job_text: str) -> bool:
-    if not parsed_json_str or not job_text:
-        return False
-    try:
-        data = json.loads(parsed_json_str) if isinstance(parsed_json_str, str) else parsed_json_str
-    except (json.JSONDecodeError, TypeError):
-        return False
-    if isinstance(data, dict):
-        text_pool = " ".join(str(v) for v in data.values() if isinstance(v, (str, list)))
-    elif isinstance(data, list):
-        text_pool = " ".join(str(item) for item in data)
-    else:
-        text_pool = str(data)
-    if not text_pool.strip():
-        return False
-    words = set(w.lower() for w in re.findall(r'[a-zA-ZäöüßÄÖÜ+]+', text_pool) if len(w) > 2)
-    job_words = set(w.lower() for w in re.findall(r'[a-zA-ZäöüßÄÖÜ+]+', job_text) if len(w) > 2)
-    common = words & job_words
-    MIN_MATCH = 3
-    return len(common) >= MIN_MATCH
-
 def _resolve_path(p: str, base_dir: Optional[str] = None) -> str:
     """Resolve a relative path using base_dir when os.getcwd() may differ."""
     if not p:
@@ -135,9 +114,9 @@ def collect_relevant_attachments(conn: sqlite3.Connection, job_text: str, anschr
         cv_abs = _resolve_path(cv_row[0], workspace_dir)
         if os.path.exists(cv_abs):
             attachments.append(cv_abs)
-    # Relevant Zertifikat/Diplom
+    # All Zertifikat/Diplom/Zeugnis/Arbeitszeugnis (include all, not just keyword-matched)
     cursor.execute(
-        "SELECT file_path, classification, parsed_json FROM candidate_files WHERE classification IN ('Zertifikat', 'Diplom')"
+        "SELECT file_path, classification, parsed_json FROM candidate_files WHERE classification IN ('Zertifikat', 'Diplom', 'Zeugnis', 'Arbeitszeugnis')"
     )
     for file_path, classification, parsed_json_str in cursor.fetchall():
         f_abs = _resolve_path(file_path, workspace_dir)
@@ -146,9 +125,8 @@ def collect_relevant_attachments(conn: sqlite3.Connection, job_text: str, anschr
         _, ext = os.path.splitext(f_abs)
         if ext.lower() not in ('.pdf', '.png', '.jpg', '.jpeg'):
             continue
-        if is_document_relevant(parsed_json_str, job_text):
-            if f_abs not in attachments:
-                attachments.append(f_abs)
+        if f_abs not in attachments:
+            attachments.append(f_abs)
     if anschreiben_pdf_path and os.path.exists(anschreiben_pdf_path):
         if anschreiben_pdf_path not in attachments:
             attachments.insert(0, anschreiben_pdf_path)

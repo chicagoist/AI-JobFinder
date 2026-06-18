@@ -4,7 +4,6 @@ import os
 import sys
 import ssl
 import sqlite3
-import zipfile
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -52,52 +51,17 @@ def send_pending_emails(config, candidate_profile, conn):
         return
 
     print(f"Found {len(rows)} pending application(s) to email.")
-    
-    output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "output")
-    os.makedirs(output_dir, exist_ok=True)
 
-    # Pre-build packages: list of (db_id, msg, zip_path)
+    # Pre-build packages: list of (db_id, msg, zip_path_or_None)
     packages = []
     for row in rows:
         db_id, company_name, job_title, url, score, applied_date, terminal_output, pdf_path = row
         print(f"\nPackaging application {db_id}: {Colors.CYAN}{job_title} at {company_name}{Colors.END}...")
         
-        safe_company = "".join([c for c in company_name if c.isalnum() or c in (" ", "_")]).strip().replace(" ", "_")
-        safe_title = "".join([c for c in job_title if c.isalnum() or c in (" ", "_")]).strip().replace(" ", "_")
-        
-        zip_filename = f"Application_{db_id}_{safe_company}_{safe_title}.zip"
-        zip_path = os.path.join(output_dir, zip_filename)
-        
-        job_info_content = f"Company: {company_name}\n"
-        job_info_content += f"Job Title: {job_title}\n"
-        job_info_content += f"URL: {url}\n"
-        job_info_content += f"Applied Date: {applied_date}\n"
-        job_info_content += f"Match Score: {score}/10\n"
-        
         clean_log = clean_ansi_escape_codes(terminal_output or "")
         if not clean_log:
             clean_log = "No console output captured."
-            
-        info_txt_path = os.path.join(output_dir, f"job_info_{db_id}.txt")
-        log_txt_path = os.path.join(output_dir, f"terminal_output_{db_id}.txt")
         
-        try:
-            with open(info_txt_path, "w", encoding="utf-8") as f:
-                f.write(job_info_content)
-            with open(log_txt_path, "w", encoding="utf-8") as f:
-                f.write(clean_log)
-                
-            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                zipf.write(info_txt_path, "job_info.txt")
-                zipf.write(log_txt_path, "terminal_output.txt")
-                if pdf_path and os.path.exists(pdf_path):
-                    zipf.write(pdf_path, os.path.basename(pdf_path))
-                else:
-                    print(f"{Colors.YELLOW}Warning: Anschreiben PDF '{pdf_path}' not found on disk. Packaging log files only.{Colors.END}")
-        except Exception as e:
-            print(f"{Colors.RED}Error creating ZIP package for job {db_id}: {e}{Colors.END}")
-            for p in (info_txt_path, log_txt_path):
-                if os.path.exists(p): os.remove(p)
         clean_subj = sanitize_header(f"Bewerbung: {job_title} bei {company_name}")
         sender_name = sanitize_header(pi.get("name", "JobAgent"))
         
@@ -106,31 +70,68 @@ def send_pending_emails(config, candidate_profile, conn):
         msg['To'] = candidate_email
         msg['Subject'] = clean_subj
         
-        body = f"""Guten Tag,
-
-hier ist Ihre automatische Bewerbung für die Position: {sanitize_header(job_title)}
-bei: {sanitize_header(company_name)}
-
-Details und Log finden Sie im Anhang.
-
-Mit freundlichen Grüßen,
-Ihr JobAgent"""
-        msg.attach(MIMEText(body, 'plain', 'utf-8'))
-        for p in (info_txt_path, log_txt_path):
-            if os.path.exists(p): os.remove(p)
-        if os.path.exists(zip_path):
-            filename = os.path.basename(zip_path)
+        # Body = full terminal output for this vacancy
+        msg.attach(MIMEText(clean_log, 'plain', 'utf-8'))
+        
+        # Attach Anschreiben PDF
+        if pdf_path and os.path.exists(pdf_path):
             try:
-                with open(zip_path, "rb") as attachment:
-                    part = MIMEBase("application", "zip")
-                    part.set_payload(attachment.read())
+                with open(pdf_path, "rb") as f:
+                    part = MIMEBase("application", "pdf")
+                    part.set_payload(f.read())
                     encoders.encode_base64(part)
-                    part.add_header("Content-Disposition", f"attachment; filename={filename}")
+                    part.add_header("Content-Disposition", f'attachment; filename="{os.path.basename(pdf_path)}"')
                     msg.attach(part)
             except Exception as e:
-                print(f"{Colors.RED}Failed to read zip attachment: {e}{Colors.END}")
+                print(f"{Colors.RED}Failed to attach Anschreiben PDF: {e}{Colors.END}")
+        else:
+            print(f"{Colors.YELLOW}Warning: Anschreiben PDF '{pdf_path}' not found on disk.{Colors.END}")
         
-        packages.append((db_id, msg, zip_path))
+        # Attach CV (Lebenslauf) — newest only
+        cursor2 = conn.cursor()
+        cursor2.execute(
+            "SELECT file_path FROM candidate_files WHERE classification = 'Lebenslauf' ORDER BY mtime DESC LIMIT 1"
+        )
+        cv_row = cursor2.fetchone()
+        if cv_row:
+            cv_abs = cv_row[0]
+            if not os.path.isabs(cv_abs):
+                cv_abs = os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(__file__)), cv_abs))
+            if os.path.exists(cv_abs):
+                try:
+                    with open(cv_abs, "rb") as f:
+                        part = MIMEBase("application", "pdf")
+                        part.set_payload(f.read())
+                        encoders.encode_base64(part)
+                        part.add_header("Content-Disposition", f'attachment; filename="{os.path.basename(cv_abs)}"')
+                        msg.attach(part)
+                except Exception as e:
+                    print(f"{Colors.RED}Failed to attach CV: {e}{Colors.END}")
+        
+        # Attach all Zertifikat/Diplom/Zeugnis/Arbeitszeugnis PDFs (all score-influencing documents)
+        cursor2.execute(
+            "SELECT file_path FROM candidate_files WHERE classification IN ('Zertifikat', 'Diplom', 'Zeugnis', 'Arbeitszeugnis')"
+        )
+        for (doc_path,) in cursor2.fetchall():
+            doc_abs = doc_path
+            if not os.path.isabs(doc_abs):
+                doc_abs = os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(__file__)), doc_abs))
+            if not os.path.exists(doc_abs):
+                continue
+            _, ext = os.path.splitext(doc_abs)
+            if ext.lower() not in ('.pdf', '.png', '.jpg', '.jpeg'):
+                continue
+            try:
+                with open(doc_abs, "rb") as f:
+                    part = MIMEBase("application", "pdf")
+                    part.set_payload(f.read())
+                    encoders.encode_base64(part)
+                    part.add_header("Content-Disposition", f'attachment; filename="{os.path.basename(doc_abs)}"')
+                    msg.attach(part)
+            except Exception as e:
+                print(f"{Colors.RED}Failed to attach {os.path.basename(doc_abs)}: {e}{Colors.END}")
+        
+        packages.append((db_id, msg, None))
     
     if not packages:
         print(f"{Colors.YELLOW}No packages built successfully.{Colors.END}")
