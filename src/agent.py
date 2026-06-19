@@ -2097,13 +2097,13 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
             print(f"{Colors.GREEN}[Auto-Approve] Automatically logging application as Applied.{Colors.END}")
             log_application(conn, company_name, job_title, url, total_score, "Applied", terminal_output=tee.getvalue() if tee else "", pdf_path=anschreiben_pdf_path)
         else:
-            print(f"{Colors.YELLOW}[Auto-Approve] Form filler returned 0 actions. Sending Anschreiben to candidate email as fallback...{Colors.END}")
+            print(f"{Colors.YELLOW}[Auto-Approve] Form filler returned 0 actions. Generating fallback draft to candidate email...{Colors.END}")
             candidate_email = candidate_profile.get("personal_info", {}).get("email")
             if candidate_email:
                 fallback_contact = {"email": candidate_email, "recruiter_name": None}
                 anschreiben_full_text = anschreiben_data.get("full_text", "") if isinstance(anschreiben_data, dict) else anschreiben_data
                 attachments = collect_relevant_attachments(conn, job_text, anschreiben_pdf_path, workspace_dir)
-                email_sent = send_direct_email(
+                draft_ok = generate_direct_email_draft(
                     config.get("smtp", {}),
                     candidate_profile,
                     fallback_contact,
@@ -2111,10 +2111,11 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
                     attachments,
                     job_title,
                     company_name,
-                    url=url
+                    url=url,
+                    terminal_output=tee.getvalue() if tee else None
                 )
-                if email_sent:
-                    log_application(conn, company_name, job_title, url, total_score, "Applied (Email)",
+                if draft_ok:
+                    log_application(conn, company_name, job_title, url, total_score, "Applied (Draft Generated)",
                                     terminal_output=tee.getvalue() if tee else "", pdf_path=anschreiben_pdf_path)
                     db_cursor = conn.cursor()
                     db_cursor.execute("UPDATE applied_jobs SET email_sent = 1 WHERE url = ?", (url,))
