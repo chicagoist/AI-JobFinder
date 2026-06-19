@@ -7,7 +7,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
-from job_agent.utils import Colors, sanitize_header
+from job_agent.utils import Colors, sanitize_header, clean_ansi_escape_codes
 from typing import Optional
 
 
@@ -171,8 +171,6 @@ def generate_candidate_digest_draft(
     # Build digest body
     digest_lines = [f"Bewerbungs-Übersicht vom {date_str}", "=" * 50, ""]
     attachment_paths = []
-
-    from job_agent.db import init_db
 
     for row in rows:
         db_id, company_name, job_title, url, score, applied_date, terminal_output, pdf_path = row
