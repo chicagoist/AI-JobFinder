@@ -1,5 +1,7 @@
 # AI-JobFinder
 
+**🚨 RECHTLICHER HINWEIS — Dieses Tool interagiert automatisiert mit Webseiten Dritter, was gegen deren AGB oder geltende Datenschutzgesetze (u.a. DSGVO, TTDSG) verstoßen kann. Die Nutzung erfolgt ausschließlich zu Test- und Lernzwecken. Nicht für reale Bewerbungen verwenden. Geplant sind eine Umstellung auf offizielle APIs sowie die Nutzung lokaler LLMs, um Rechtskonformität zu gewährleisten.**
+
 **⚠️ BETA — This project is in early beta. Features, configuration, and data formats may change without notice. Use at your own risk.**
 
 Automated job application agent for the German-speaking job market. Currently supports **Indeed** and **LinkedIn** — evaluates vacancies through LLM scoring, generates personalised cover letters as PDF, and submits applications via direct email or web form autofill with Playwright. Support for StepStone, Monster, Xing, Glassdoor and other platforms is planned for future releases.
