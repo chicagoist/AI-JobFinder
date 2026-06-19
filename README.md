@@ -2,20 +2,21 @@
 
 **⚠️ BETA — This project is in early beta. Features, configuration, and data formats may change without notice. Use at your own risk.**
 
-Automated job application agent for the German-speaking job market. Currently supports **Indeed** and **LinkedIn** — evaluates vacancies through LLM scoring, generates personalised cover letters as PDF, and submits applications via direct email or web form autofill with Playwright. Support for StepStone, Monster, Xing, Glassdoor and other platforms is planned for future releases.
+**⚠️ LEGAL COMPLIANCE NOTICE — This project is designed to operate FULLY LOCALLY to comply with EU/German data protection law (GDPR, BDSG, EU AI Act).** See `LEGAL_COMPLIANCE_PLAN.md` for the complete compliance strategy.
+
+AI-assisted job application tool for the German-speaking market. Searches official job APIs (Bundesagentur für Arbeit, Arbeitnow), evaluates vacancies through local LLM scoring (Ollama), generates personalised cover letters as PDF, and creates email drafts for manual user review. **No automatic emails, no cloud LLM for PII, no session-based scraping.**
 
 ---
 
-## 🔑 API Keys — Quick Overview / Schnellübersicht
+## 🔑 API Keys — Quick Overview
 
-| Service | Where to get / Wo holen? | Usage / Verwendung |
-|---------|--------------------------|--------------------|
-| **Gemini** (primary LLM) | [🔗 aistudio.google.com/apikey](https://aistudio.google.com/apikey) | Job scoring, cover letters, CV parsing, recruiter extraction |
-| **OpenRouter** (free fallback) | [🔗 openrouter.ai/keys](https://openrouter.ai/keys) | Automatic fallback when Gemini keys are exhausted |
+| Service | Usage | GDPR Safe? |
+|---------|-------|------------|
+| **Ollama** (default LLM) | Local scoring, cover letters, CV parsing — **no data leaves your machine** | ✅ Fully local |
+| **Gemini** (optional fallback) | Fallback LLM when local model unavailable | ❌ PII sent to US |
+| **OpenRouter** (optional fallback) | Free fallback LLM | ❌ PII sent to US |
 
-> **DE:** Gemini ist der primäre KI-Dienst für Bewertung, Anschreiben und CV-Parsing.  
-> OpenRouter dient als kostenloses Fallback, wenn alle Gemini-Keys erschöpft sind.  
-> Beide sind in `src/config/config.yaml` konfigurierbar.
+> **Default: `llm.priority: local`** — All PII stays on your machine. Cloud LLMs are disabled unless explicitly enabled.
 
 ---
 
@@ -24,32 +25,21 @@ Automated job application agent for the German-speaking job market. Currently su
 **This project lives from the community!**  
 Whether you are an experienced Python developer, an AI enthusiast, or just someone who wants to automate the job application process — **you are warmly invited to fork this repository, improve it, or extend it**.
 
-My roadmap includes:
-- ➕ **New job platforms** — StepStone, Xing, Monster, Glassdoor
-- ➕ **New LLM providers** — Claude, local models via Ollama
-- ➕ **Headless CI/CD integration** — fully automated pipeline
+Roadmap:
+- ➕ **More job APIs** — StepStone, Xing
+- ➕ **More local LLMs** — via Ollama model library
 - ➕ **Docker containerization** — one-command setup
 - ➕ **Web UI / Dashboard** — track applications visually
 
 → **Fork the repository**, create a Pull Request, or open an Issue.  
 → **Every contribution counts** — be it a new module, a bug fix, or better documentation.
 
-<p align="left">
-  <a href="https://addons.mozilla.org/en-GB/firefox/addon/job-matcher-ai/">
-    <img src="https://img.shields.io/badge/Firefox-🧩_Job_Matcher_AI-FF7139?style=for-the-badge&logo=firefox&logoColor=white"
-         alt="Job Matcher AI for Firefox"
-         width="320">
-  </a>
-  <br>
-  <sub>Companion extension — analyse job listings directly in your browser</sub>
-</p>
-
 ---
 
 ## Table of Contents
 
+- [Legal Compliance](#-legal-compliance)
 - [How It Works](#how-it-works)
-- [Pipeline Diagram](#pipeline-diagram)
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Configuration](#configuration)
@@ -58,11 +48,29 @@ My roadmap includes:
 
 ---
 
+## ⚖️ Legal Compliance
+
+This project is designed to AVOID the following legal violations:
+
+| Risk | Mitigation |
+|------|------------|
+| **GDPR Art. 22** — Automated profiling decisions | Scoring is a **recommendation**. User makes final decision. All outputs are drafts. |
+| **GDPR Art. 5-6** — Processing recruiter data without consent | **No automatic emails.** `.eml` drafts generated for manual sending only. |
+| **Schrems II** — PII transfer to US cloud providers | **Default LLM is local** (Ollama). Cloud LLMs are optional opt-in fallbacks. |
+| **ToS violations** — Web scraping job portals | **Official job APIs** (Bundesagentur, Arbeitnow) instead of scraping. |
+| **UrhG database rights** — Bulk content extraction | API-based data access respects copyright. |
+| **EU AI Act** — High-risk AI in hiring | Human-in-the-loop design. All decisions reviewed by user. |
+
+**Full plan:** See `LEGAL_COMPLIANCE_PLAN.md`
+**Implementation rules:** See `AGENTS.md` → Legal Compliance Requirements
+
+---
+
 ## How It Works
 
-The agent processes job vacancies one by one through a deterministic pipeline. Each vacancy goes through the following stages:
+The agent processes job vacancies through a deterministic pipeline:
 
-**1. Job URL acquisition** — URLs come from either an Indeed/StepStone keyword search (`--search-jobs`) or a direct URL (`--url`). Indeed search pages are parsed for individual job links; each link is visited separately.
+**1. Job URL acquisition** — URLs come from official job API search (`--search-jobs`) or a direct URL (`--url`). Search uses Bundesagentur für Arbeit + Arbeitnow APIs. **No web scraping.**
 
 **2. Duplicate check** — Every URL is checked against the SQLite database (`output/applications.db`, table `applied_jobs`). If the URL already exists (regardless of status), the vacancy is skipped immediately. This guarantees idempotency across multiple runs.
 

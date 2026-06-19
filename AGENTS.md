@@ -2,28 +2,102 @@
 
 ## Overview
 
-Python CLI tool that automates German job applications: searches Indeed/LinkedIn, scores jobs against a candidate profile via LLM, generates German cover letters (Anschreiben) in DIN 5008 format, fills web forms or sends direct emails.
+Python CLI tool that automates German job applications: searches job APIs (Bundesagentur, Arbeitnow), scores jobs against a candidate profile via local LLM (Ollama), generates German cover letters (Anschreiben) in DIN 5008 format, generates email drafts for manual review.
 
-## Email Requirements (HARD — DO NOT BREAK)
+**KEY PRINCIPLE: This project operates FULLY LOCALLY — no cloud LLM, no automatic email sending, no session-based scraping.**
 
-Two email paths exist; each has strict content requirements:
+## Legal Compliance Requirements (HARD — DO NOT BREAK)
 
-### 1. Candidate Email (Batch `--send-email` / CC copy)
-- **Body:** Full terminal output for that specific vacancy (cleaned of ANSI codes). Not a brief summary — the complete `TeeStdout` log captured during `process_job_url`.
+This project must NEVER violate EU/German law. The following rules are NON-NEGOTIABLE:
+
+### 1. No Automatic Email Sending
+- ❌ `send_direct_email()` via SMTP is FORBIDDEN
+- ✅ Always generate `.eml` draft files instead — user sends manually
+- ❌ `--send-email` batch SMTP sending is FORBIDDEN
+- ✅ Generate email digest drafts instead
+
+### 2. No Cloud LLM for PII Processing
+- ❌ Google Gemini sending candidate PII to US servers is FORBIDDEN
+- ✅ Default LLM must be LOCAL (Ollama: Qwen/Llama/Mistral)
+- ✅ Cloud LLM (Gemini, OpenRouter) is OPTIONAL fallback only with explicit user consent
+
+### 3. No Session-Based Scraping
+- ❌ Web scraping with logged-in browser sessions (persistent Chrome profiles) is FORBIDDEN
+- ✅ Use official job APIs: Bundesagentur für Arbeit, Arbeitnow
+- ✅ Playwright is ONLY for PDF generation — read-only, no sessions, no login
+
+### 4. No Automated Profiling Decisions
+- ❌ Auto-applying based on LLM score is FORBIDDEN
+- ✅ Scoring is a RECOMMENDATION only
+- ✅ All outputs are drafts — user reviews and decides
+
+### 5. GDPR Consent Required
+- ✅ Privacy notice shown on first run
+- ✅ Explicit consent logged to database before any processing
+
+## Email Draft Requirements (HARD — DO NOT BREAK)
+
+Instead of SMTP sending, generate `.eml` draft files:
+
+### 1. Candidate Email Draft
+- **Body:** Full terminal output for that specific vacancy (cleaned of ANSI codes). The complete `TeeStdout` log captured during `process_job_url`.
 - **Attachments (direct PDFs, not ZIP):**
   - `Anschreiben_<Company>.pdf` — the generated cover letter PDF
   - `Lebenslauf.pdf` — newest CV from `candidate_files` table (classification `Lebenslauf`, ordered by `mtime DESC LIMIT 1`)
-  - **All** Zertifikat / Diplom / Zeugnis / Arbeitszeugnis PDFs from `candidate_files` table — unconditionally, without keyword filtering. These are documents that influenced the LLM scoring decision.
+  - **All** Zertifikat / Diplom / Zeugnis / Arbeitszeugnis PDFs from `candidate_files` table — unconditionally.
 
-### 2. Recruiter Email (Direct `send_direct_email`)
+### 2. Recruiter Email Draft
 - **Body:** The full Anschreiben (cover letter) text — including Betreffzeile, Anrede, body, and Grußformel.
-- **Attachments:** Same as candidate email — `Anschreiben_<Company>.pdf` + `Lebenslauf.pdf` + all Zertifikat/Diplom/Zeugnis/Arbeitszeugnis PDFs from `candidate_files`.
+- **Attachments:** Same as candidate draft — `Anschreiben_<Company>.pdf` + `Lebenslauf.pdf` + all Zertifikat/Diplom/Zeugnis/Arbeitszeugnis PDFs.
 
 ### Implementation
-- **Candidate path:** `email_sender.py` → `send_pending_emails()` — body = `clean_ansi_escape_codes(terminal_output)`, attachments queried from `candidate_files` table.
-- **Recruiter path:** `direct_email_applier.py` → `send_direct_email()` + `collect_relevant_attachments()` — body = `anschreiben_text`, attachments include all candidate documents unconditionally.
+- **Candidate path:** `email_draft_generator.py` → `generate_email_draft()` — body = `clean_ansi_escape_codes(terminal_output)`, attachments from `candidate_files`.
+- **Recruiter path:** `email_draft_generator.py` → `generate_email_draft()` — body = `anschreiben_text`, same attachments.
 
-**NEVER remove or weaken these requirements.** They are the core purpose of this application.
+**NEVER replace draft generation with SMTP sending.** This is the core legal protection.
+
+## Execution TODO List (optimized for context/token window)
+
+This TODO list breaks the restructuring into independent steps. Each step is a complete work unit that can be executed in one conversation turn.
+
+### Step 1: Create `email_draft_generator.py`
+- **Files:** NEU `src/job_agent/email_draft_generator.py`
+- **What:** Module with `generate_email_draft()` — creates `.eml` + `.txt` files in `src/drafts/`
+- **Input:** Same params as `send_direct_email()`
+- **Output:** Path to saved draft file
+- **Delete:** SMTP sending code from `direct_email_applier.py` and `email_sender.py`
+- **Test:** `python -c "from job_agent.email_draft_generator import generate_email_draft; ..."`
+
+### Step 2: Create `ollama_llm.py` + update `llm.py`
+- **Files:** NEU `src/job_agent/ollama_llm.py`, EDIT `src/job_agent/llm.py`
+- **What:** Local LLM client via Ollama HTTP API
+- **Priority:** local → openrouter → gemini
+- **Default:** `llm.priority: local` in config
+- **Test:** `bash scripts/setup_local_llm.sh && python -c "from job_agent.ollama_llm import call_ollama; print(call_ollama('test'))"`
+
+### Step 3: Create `job_sources/` package
+- **Files:** NEU `src/job_agent/job_sources/__init__.py`, `bundesagentur.py`, `arbeitnow.py`
+- **What:** Official job API adapters — no scraping, no browser sessions
+- **Test:** `python -c "from job_agent.job_sources.bundesagentur import BundesagenturSource; print(BundesagenturSource().search('Python', 'Frankfurt'))"`
+
+### Step 4: Refactor `agent.py` — API search + HITL scoring + draft pipeline
+- **Files:** EDIT `src/agent.py`
+- **What:** Replace Indeed/LinkedIn scraping with API search; replace auto-apply with draft generation; scoring = recommendation
+- **Test:** `python -u src/agent.py --search-jobs "Fachinformatiker" --location "Frankfurt" --radius 25`
+
+### Step 5: Create `onboarding.py` + GDPR consent
+- **Files:** NEU `src/onboarding.py`, EDIT `src/job_agent/db.py`
+- **What:** First-run consent flow, `consent_log` table, privacy notice
+- **Test:** Run agent without DB → should show consent
+
+### Step 6: Typecheck + commit + push
+- **Run:** `bash src/check_types.sh`
+- **Commit:** `git add -A && git commit -m "feat: legal compliance — local LLM, draft-only email, official APIs, HITL scoring, GDPR consent"`
+- **Push:** `git push origin develop`
+
+## Full Restructuring Plan
+
+See `LEGAL_COMPLIANCE_PLAN.md` for the complete detailed plan with code snippets, risk assessment, and module map.
 
 ## Architecture
 

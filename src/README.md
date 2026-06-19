@@ -1,44 +1,51 @@
 <!-- PROJECT LOGO / TITLE -->
 <div align="center">
-  <h1>🤖 Gemini JobAgent</h1>
-  <p><strong>Automatisierte Bewerbungen auf dem deutschen Arbeitsmarkt — KI-gestützt, mehrsprachig, erweiterbar.</strong></p>
+  <h1>🤖 AI-JobFinder</h1>
+  <p><strong>Automatisierte Bewerbungen auf dem deutschen Arbeitsmarkt — KI-gestützt, lokal, datenschutzkonform.</strong></p>
   <br>
 </div>
 
 ---
 
+## ⚖️ Rechtliche Hinweise
+
+Dieses Projekt ist auf **vollständig lokale Verarbeitung** ausgelegt:
+- **Keine automatischen E-Mails** — nur `.eml`-Entwürfe zum manuellen Versand
+- **Kein Cloud-LLM** — Default ist lokales Ollama (Qwen/Llama)
+- **Kein Session-Scraping** — offizielle Job-APIs statt Browser-Automation
+
+➡️ Siehe `LEGAL_COMPLIANCE_PLAN.md` (en) für den vollständigen Compliance-Plan.
+
+---
+
 ## 🔑 API-Schlüssel — Übersicht
 
-| Dienst | Bezugsquelle | Verwendung |
-|--------|-------------|------------|
-| **Gemini** (primär) | [🔗 aistudio.google.com/apikey](https://aistudio.google.com/apikey) | Job-Scoring, Anschreiben, CV-Parsing, Recruiter-Extraktion |
-| **OpenRouter** (Fallback) | [🔗 openrouter.ai/keys](https://openrouter.ai/keys) | Automatischer Fallback wenn alle Gemini-Keys erschöpft sind |
+| Dienst | Verwendung | GDPR-Sicher? |
+|--------|------------|-------------|
+| **Ollama** (Default-LLM) | Lokales Scoring, Anschreiben, CV-Parsing | ✅ Ja — keine Daten verlassen den Rechner |
+| **Gemini** (Fallback) | Optionaler Cloud-Fallback | ❌ PII wird in die USA gesendet |
+| **OpenRouter** (Fallback) | Optionaler kostenloser Fallback | ❌ PII wird in die USA gesendet |
 
-> **EN:** Gemini is the primary LLM for scoring, cover letters and CV parsing.  
-> OpenRouter serves as free fallback when all Gemini keys are exhausted.  
-> Both are configured in `src/config/config.yaml`.
+> **Default: `llm.priority: local`** — Cloud-LLMs sind standardmässig deaktiviert.
 
 ---
 
 ## 📢 Einladung an die Community
 
 **Dieses Projekt lebt von der Gemeinschaft!**  
-Egal, ob du ein erfahrener Python-Entwickler, ein KI-Enthusiast oder jemand bist, der einfach nur den Bewerbungsprozess automatisieren möchte — **du bist herzlich eingeladen, dieses Repository zu forken, zu verbessern oder zu erweitern**.
+Egal, ob du ein erfahrener Python-Entwickler oder KI-Enthusiast bist — **du bist herzlich eingeladen, dieses Repository zu forken, zu verbessern oder zu erweitern**.
 
-In meiner Roadmap stehen bereits:
-- ➕ **Neue Job-Plattformen** (StepStone, Monster, Glassdoor, XING)
-- ➕ **Neue LLM-Provider** (Claude, lokal laufende Modelle via Ollama)
-- ➕ **Headless-Betrieb für CI/CD-Integration**
+Roadmap:
+- ➕ **Weitere Job-APIs** (StepStone, XING)
+- ➕ **Weitere lokale LLMs** (via Ollama Model Library)
 - ➕ **Docker-Containerisierung**
 - ➕ **Web-UI / Dashboard**
-
-→ **Forke das Repository**, erstelle einen Pull Request oder reiche ein Issue ein.  
-→ **Jeder Beitrag zählt**, sei es ein neues Modul, ein Bugfix oder eine bessere Dokumentation.
 
 ---
 
 ## 📋 Inhaltsverzeichnis
 
+- [Rechtliche Compliance](#%EF%B8%8F-rechtliche-compliance)
 - [Über das Projekt](#-über-das-projekt)
 - [Für wen ist dieses Tool?](#-für-wen-ist-dieses-tool)
 - [Wie funktioniert es?](#-wie-funktioniert-es)
@@ -55,221 +62,15 @@ In meiner Roadmap stehen bereits:
 
 ---
 
-## 📖 Über das Projekt
+## ⚖️ Rechtliche Compliance
 
-**Gemini JobAgent** ist ein Python-basiertes CLI-Tool, das den Bewerbungsprozess auf dem **deutschen Arbeitsmarkt** automatisiert. Es kombiniert:
-
-- **Playwright** (Browser-Automation) zum Scrapen von Stellenanzeigen und Ausfüllen von Webformularen
-- **Google Gemini API** (mit automatischer Key-Rotation und Modell-Fallback) zur:
-  - Bewertung von Stellenanzeigen anhand eines Kandidatenprofils (0–10 Score)
-  - Generierung von DIN-5008-konformen Anschreiben (PDF) auf Deutsch
-  - intelligenten Ausfüllen von Bewerbungsformularen
-- **SMTP-Versand** für Direktbewerbungen per E-Mail
-- **SQLite-Datenbank** zur Nachverfolgung aller Bewerbungen
-
-Das Tool unterstützt derzeit **Indeed** und **LinkedIn** als Quellen für Stellenanzeigen und kann sowohl im manuellen Modus (Human-in-the-Loop) als auch vollautomatisch arbeiten.
-
----
-
-## 🎯 Für wen ist dieses Tool?
-
-| Zielgruppe | Nutzen |
-|---|---|
-| **Arbeitssuchende in Deutschland** | Automatisierte Bewertung und Bewerbung auf massenhaft passende Stellen |
-| **Berufseinsteiger / Quereinsteiger** | KI generiert professionelle Anschreiben mit individueller Anpassung |
-| **Entwickler & KI-Enthusiasten** | Erweiterbare Codebasis, eigene LLM-Provider einbindbar |
-| **Recruiter (als Experiment)** | Analyse der eigenen Stellenausschreibungen aus Kandidatensicht |
-
----
-
-## ⚙️ Wie funktioniert es?
-
-```
-   ┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
-   │ Konfiguration│────▶│  Browser starten  │────▶│ Stellensuche auf │
-   │  (YAML/JSON) │     │  (Chrome/CDP)    │     │ Indeed/LinkedIn  │
-   └─────────────┘     └──────────────────┘     └────────┬────────┘
-                                                         │
-                                                         ▼
-   ┌──────────────────────────────────────────────────────────────┐
-   │                     BEWERTUNGSPIPELINE                        │
-   │                                                              │
-   │  ┌─────────────┐   ┌───────────────┐   ┌──────────────────┐  │
-   │  │ Lokaler K.O. │──▶│ KI-Scoring     │──▶│ K.O.-Prüfung     │  │
-   │  │ Regex-Filter │   │ (Gemini/OR)   │   │ (Score ≥ 5.0?)   │  │
-   │  └─────────────┘   └───────┬───────┘   └────────┬─────────┘  │
-   │                            │                      │           │
-   │                            ▼                      ▼           │
-   │                     ┌──────────────┐    ┌──────────────────┐  │
-   │                     │ Anschreiben  │    │ Bei K.O.:        │  │
-   │                     │ generieren   │    │ Überspringen +   │  │
-   │                     │ (KI, DIN 5008)│    │ Loggen           │  │
-   │                     └──────┬───────┘    └──────────────────┘  │
-   └────────────────────────────┼──────────────────────────────────┘
-                                │
-                                ▼
-   ┌──────────────────────────────────────────────────────────────┐
-   │                     BEWERBUNGSARTEN                           │
-   │                                                              │
-   │  ┌──────────────────┐  ┌──────────────┐  ┌────────────────┐  │
-   │  │ Webformular      │  │ LinkedIn      │  │ Direkt-E-Mail   │  │
-   │  │ ausfüllen (KI)   │  │ Easy Apply    │  │ an HR (SMTP)   │  │
-   │  └────────┬─────────┘  └──────┬───────┘  └───────┬────────┘  │
-   │           │                   │                   │           │
-   │           ▼                   ▼                   ▼           │
-   │  ┌──────────────────────────────────────────────────────┐     │
-   │  │        Logging in SQLite + PDF speichern             │     │
-   │  └──────────────────────────────────────────────────────┘     │
-   └──────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-   ┌──────────────────────────────────────────────────────────────┐
-   │  E-Mail-Versand (optional):                                  │
-   │  - Packt Bewerbungsdaten in ZIP (Job-Info + Log + PDF)      │
-   │  - Sendet an Kandidaten-E-Mail als Backup                   │
-   └──────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 🏗️ Architektur-Übersicht
-
-```
-AI-JobFinder/
-├── agent.py                        # Haupt-Einstiegspunkt (~2600 Zeilen)
-│   ├── CLI-Argument-Parser
-│   ├── Tkinter-GUI (config editor)
-│   ├── Browser-Setup (Playwright)
-│   ├── Job-Suche & -Scoring
-│   ├── Anschreiben-Generierung & PDF
-│   ├── Formular-Ausfüll-Logik
-│   └── Datenbank-Operationen
-│
-├── job_agent/                      # Kern-Paket
-│   ├── __init__.py
-│   ├── llm.py                      # Gemini API-Client mit Key-Rotation
-│   ├── openrouter_llm.py           # OpenRouter-Fallback
-│   ├── groq_llm.py                 # Groq-Provider
-│   ├── deepseek_llm.py             # DeepSeek-Provider
-│   ├── config.py                   # YAML/JSON-Konfigurationsloader
-│   ├── db.py                       # SQLite-Datenbank (applications.db)
-│   ├── utils.py                    # ANSI-Farben, JSON-Reparatur, TeeStdout
-│   ├── email_sender.py             # E-Mail-Paketierung & -Versand
-│   └── direct_email_applier.py     # Direktbewerbung per E-Mail
-│
-├── config/                         # Benutzer-Konfiguration
-│   ├── config.yaml                 # API-Keys, SMTP, Chrome-Pfad
-│   ├── job_criteria.yaml           # K.O.-Filter, Score-Schwellen
-│   ├── candidate_profile.json      # Kandidatenprofil (KI-generiert)
-│   ├── prompts.yaml                # Prompt-Vorlagen
-│   └── *.sample                    # Vorlagen für Erstsetup
-│
-├── output/                         # Generierte Dateien
-│   ├── Anschreiben_*.pdf           # Deckblatt-PDFs
-│   └── applications.db             # SQLite-Datenbank
-│
-├── documents/                      # Kandidaten-PDFs (CV, Zeugnisse)
-│
-├── temp_profile/                   # Fallback-Chrome-Profil
-│
-├── mock_jobs.py                    # Test-Code für Jobsuche-Mock
-├── test_pw.py                      # Playwright-Test
-├── test_genai.py                   # Gemini-API-Test
-└── test_invalid.py                 # Platzhalter-Test
-```
-
----
-
-## 📊 Modulübersicht (UML-Tabelle)
-
-| Modul / Datei | Typ | Verantwortlichkeit | Schlüssel-Funktionen |
-|---|---|---|---|
-| **`agent.py`** | CLI-Orchestrator | Hauptlogik, CLI-Parsing, Browser-Steuerung | `main()`, `get_browser_context()`, `process_job_url()`, `score_job()`, `generate_anschreiben()`, `save_anschreiben_pdf()`, `fill_page_form()` |
-| **`job_agent/llm.py`** | API-Client | Gemini API mit Key-Rotation & Fallback | `init_gemini()`, `generate_content_with_retry()`, `llm_request_with_fallback()` |
-| **`job_agent/openrouter_llm.py`** | API-Client | OpenRouter-API (Free-Modelle) | `call_openrouter()` |
-| **`job_agent/groq_llm.py`** | API-Client | Groq-API (Llama 3.3) | `call_groq()` |
-| **`job_agent/deepseek_llm.py`** | API-Client | DeepSeek-API | `call_deepseek()` |
-| **`job_agent/config.py`** | Konfiguration | YAML/JSON-Loader, Default-Prompts | `load_config()`, `load_criteria()`, `load_prompts()`, `restore_active_configs_from_samples()` |
-| **`job_agent/db.py`** | Persistenz | SQLite-Datenbank (applications.db) | `init_db()`, `log_application()`, `is_already_applied()`, `log_user_rejection()` |
-| **`job_agent/utils.py`** | Hilfsfunktionen | ANSI-Farben, JSON-Reparatur, I/O | `clean_and_repair_json()`, `TeeStdout`, `clean_ansi_escape_codes()` |
-| **`job_agent/email_sender.py`** | E-Mail-Versand | Packt Bewerbungen in ZIP und sendet per SMTP | `send_pending_emails()` |
-| **`job_agent/direct_email_applier.py`** | E-Mail-Bewerbung | Extrahiert HR-Kontakte, personalisiert Anschreiben | `extract_contact_info()`, `personalize_anschreiben()`, `send_direct_email()` |
-| **`mock_jobs.py`** | Test-Helper | Mockt die Jobsuche und führt `main()` aus | – |
-| **`test_pw.py`** | Integrationstest | Playwright-Verschachtelungstest | – |
-| **`test_genai.py`** | Integrationstest | Gemini-API-Konnektivitätstest | – |
-
----
-
-## 📦 Abhängigkeiten
-
-### Systemvoraussetzungen
-
-- **Python 3.10+**
-- **Google Chrome** oder **Chromium** (für Playwright)
-  - Wird automatisch erkannt (auch Brave, Edge)
-- **Tkinter** (optional, für die Konfigurations-GUI)
-  - Auf Ubuntu/Debian: `sudo apt install python3-tk`
-
-### Python-Pakete
-
-```bash
-# Kern-Abhängigkeiten
-pip install playwright pyyaml google-genai PyMuPDF
-
-# Browser-Engine installieren
-playwright install chromium
-```
-
-> **Hinweis:** Die alternativen LLM-Provider (OpenRouter, Groq, DeepSeek) verwenden nur die Python-Standardbibliothek (`urllib.request`) und benötigen keine zusätzlichen Pakete.
-
----
-
-## 🔧 Konfigurationsdateien
-
-Alle relevanten Konfigurationsdateien befinden sich im `config/`-Verzeichnis.  
-Beim ersten Start können `.sample`-Dateien in aktive Konfigurationen umgewandelt werden (via `--reset-candidate`).
-
-### 1. `config/config.yaml` — Hauptkonfiguration
-
-```yaml
-user_profile:
-  chrome_data_dir: "C:\\Users\\<Username>\\AppData\\Local\\Google\\Chrome\\User Data"
-  chrome_profile: "Default"
-  cv_path: "../documents/Lebenslauf.pdf"      # Pfad zum CV-PDF
-  documents_dir: "../documents"               # Verzeichnis für weitere Dokumente
-
-defaults:
-  salary_expectation: "36.000 €"              # Gehaltsvorstellung
-  availability: "sofort"                      # Verfügbarkeit
-  work_permit: "Germany"                      # Arbeitserlaubnis
-  notice_period: "3 Monate zum Quartalsende"  # Kündigungsfrist
-
-criteria:
-  min_score: 8.0                              # Min. Score (wird überschrieben)
-  min_salary_eur: 36000
-  remote_allowed: true
-  german_level: "B2"
-  excluded_companies:                         # Firmen-Blacklist
-    - "Zukunftsmotor"
-
-# Hinweis: Die Bewertungsparameter (min_score, min_salary, etc.)
-# werden aus job_criteria.yaml gelesen, nicht aus dieser Section.
-
-gemini:
-  model: "gemini-2.5-flash"                   # Standard-Modell
-  api_keys:                                    # Bis zu 4 Keys für Rotation
-    - "AIzaSy..."                             # Key 1
-    - "AIzaSy..."                             # Key 2
-
-llm:
-  priority: "gemini"                          # "gemini" oder "openrouter"
-
-smtp:
-  host: "smtp.gmail.com"
-  port: 587
-  username: "your.email@gmail.com"
-  password: "your-app-password"               # Google App Password
-```
+| Risiko | Massnahme |
+|--------|-----------|
+| **GDPR Art. 22** — Automatisierte Profiling-Entscheidungen | Scoring ist eine **Empfehlung**. Der Nutzer entscheidet final. Alle Ausgaben sind Entwürfe. |
+| **GDPR Art. 5-6** — Verarbeitung von Recruiter-Daten ohne Einwilligung | **Keine automatischen E-Mails.** Nur `.eml`-Entwürfe zum manuellen Versand. |
+| **Schrems II** — PII-Transfer in die USA | **Default-LLM ist lokal** (Ollama). Cloud-LLMs sind optionale Opt-In-Fallbacks. |
+| **ToS-Verletzung** — Web-Scraping von Jobportalen | **Offizielle Job-APIs** (Bundesagentur, Arbeitnow) statt Scraping. |
+| **UrhG Datenbankrechte** — Massen-Extraktion | API-basierter Zugriff respektiert Urheberrecht. |
 
 ### 2. `config/job_criteria.yaml` — Bewertungskriterien
 
