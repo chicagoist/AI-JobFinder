@@ -25,10 +25,12 @@ IS_CONFIG_DRIVEN_KEYS = False
 INITIALIZED = False
 PRIORITY_LLM = "local"  # "local" | "openrouter" | "gemini"
 LOCAL_MODEL = DEFAULT_MODEL  # Ollama model name
+ALLOW_CLOUD_FALLBACK = False  # GDPR: must be explicitly set to true in config.yaml
+_gdpr_warning_shown = False  # Show GDPR block warning only once per session
 
 
 def init_gemini(config_path=None, force=False):
-    global CURRENT_KEY_INDEX, API_KEYS, GEMINI_MODEL, IS_CONFIG_DRIVEN_KEYS, INITIALIZED, KEY_STATUS, PRIORITY_LLM, LOCAL_MODEL
+    global CURRENT_KEY_INDEX, API_KEYS, GEMINI_MODEL, IS_CONFIG_DRIVEN_KEYS, INITIALIZED, KEY_STATUS, PRIORITY_LLM, LOCAL_MODEL, ALLOW_CLOUD_FALLBACK
     
     if INITIALIZED and not force:
         return
@@ -53,6 +55,8 @@ def init_gemini(config_path=None, force=False):
         local_model = config.get("llm", {}).get("local_model", DEFAULT_MODEL)
         if local_model:
             LOCAL_MODEL = local_model
+        # Read cloud fallback permission (GDPR)
+        ALLOW_CLOUD_FALLBACK = config.get("llm", {}).get("allow_cloud_fallback", False)
     except Exception:
         pass
 
@@ -197,33 +201,47 @@ def llm_request_with_fallback(prompt, **kwargs):
     """
     Tries LLMs in priority order:
     1. Local (Ollama) — GDPR compliant, no data leaves the machine
-    2. OpenRouter — free fallback
-    3. Gemini — last resort fallback with key rotation
+    2. OpenRouter — only if allow_cloud_fallback=True (GDPR: explicit opt-in)
+    3. Gemini — only if allow_cloud_fallback=True (GDPR: explicit opt-in)
+
+    GDPR: When priority=local and Ollama is unavailable, the cloud fallback
+    is BLOCKED unless config.yaml has llm.allow_cloud_fallback: true.
+    This prevents accidental PII transfer to US servers (Schrems II).
     """
     global PRIORITY_LLM, LOCAL_MODEL
 
     # --- Priority: LOCAL (Ollama) ---
     if PRIORITY_LLM == "local":
-        print(f"{Colors.CYAN}[LLM] Priority: Local ({LOCAL_MODEL}). Trying Ollama...{Colors.END}")
+        print(f"{Colors.CYAN}[LLM] Priority: Local ({LOCAL_MODEL}). Using Ollama...{Colors.END}")
         if ollama_available(LOCAL_MODEL):
             local_resp = call_ollama(prompt, model=LOCAL_MODEL)
             if local_resp:
-                # Wrap response in a simple object that mimics gemini response format
                 class LocalResponse:
                     def __init__(self, text):
                         self.text = text
                 return LocalResponse(local_resp)
-            print(f"{Colors.YELLOW}[LLM] Local LLM returned no response. Trying fallbacks...{Colors.END}")
+            print(f"{Colors.YELLOW}[LLM] Local LLM returned empty response.{Colors.END}")
         else:
             print(f"{Colors.YELLOW}[LLM] Ollama not available. Run: bash scripts/setup_local_llm.sh{Colors.END}")
-        
-        # Fallback to OpenRouter
-        print(f"{Colors.CYAN}[LLM] Trying OpenRouter fallback...{Colors.END}")
+
+        # GDPR: Block cloud fallback unless explicitly allowed (read once in init_gemini)
+        if not ALLOW_CLOUD_FALLBACK:
+            global _gdpr_warning_shown
+            if not _gdpr_warning_shown:
+                _gdpr_warning_shown = True
+                print(f"{Colors.RED}{Colors.BOLD}[GDPR BLOCK] Cloud fallback is DISABLED — PII stays local.{Colors.END}")
+                print(f"{Colors.RED}  Personal data will NOT be sent to OpenRouter/Gemini (US servers).{Colors.END}")
+                print(f"{Colors.RED}  To enable cloud fallback (at your own risk), set in config.yaml:{Colors.END}")
+                print(f"{Colors.RED}    llm.allow_cloud_fallback: true{Colors.END}")
+                print(f"{Colors.YELLOW}  Please start Ollama: ollama serve && ollama pull {LOCAL_MODEL}{Colors.END}")
+            return None
+
+        # Explicit opt-in: user allowed cloud fallback
+        print(f"{Colors.YELLOW}[LLM] Cloud fallback explicitly allowed. Trying OpenRouter...{Colors.END}")
         or_resp = call_openrouter(prompt, **kwargs)
         if or_resp:
             return or_resp
-        
-        # Final fallback to Gemini
+
         print(f"{Colors.CYAN}[LLM] Trying Gemini fallback...{Colors.END}")
         return generate_content_with_retry(GEMINI_MODEL, prompt, **kwargs)
 

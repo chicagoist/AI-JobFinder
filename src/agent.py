@@ -227,8 +227,8 @@ def run_config_gui(config_path, criteria_path, profile_path, prompts_path):
     doc_dir_entry.grid(row=6, column=1, sticky="w", padx=10, pady=5)
     
     ttk.Label(tab1, text="Priority LLM:", font=('Segoe UI', 9, 'bold')).grid(row=7, column=0, sticky="w", padx=10, pady=5)
-    priority_llm_combo = ttk.Combobox(tab1, values=["gemini", "openrouter"], state="readonly", width=30)
-    priority_llm_combo.set(config_data.get("llm", {}).get("priority", "gemini"))
+    priority_llm_combo = ttk.Combobox(tab1, values=["local", "gemini", "openrouter"], state="readonly", width=30)
+    priority_llm_combo.set(config_data.get("llm", {}).get("priority", "local"))
     priority_llm_combo.grid(row=7, column=1, sticky="w", padx=10, pady=5)
     
     ttk.Separator(tab1, orient="horizontal").grid(row=8, column=0, columnspan=2, sticky="ew", padx=10, pady=8)
