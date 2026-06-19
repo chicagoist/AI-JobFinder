@@ -17,6 +17,7 @@ from job_agent.utils import Colors, clean_and_repair_json, TeeStdout
 from job_agent.config import load_config, load_criteria, load_prompts, restore_active_configs_from_samples, DEFAULT_PROMPTS, PROMPTS
 from job_agent.db import init_db, log_application, log_user_rejection, get_past_rejections, is_already_applied
 from job_agent.llm import init_gemini, generate_content_with_retry, llm_request_with_fallback
+from job_agent.pipeline import run_pipeline_mode
 from playwright.sync_api import sync_playwright
 
 # API Keys and client configuration are managed in job_agent/llm.py
@@ -2409,6 +2410,7 @@ def main():
     parser.add_argument("--criteria", type=str, default="config/job_criteria.yaml", help="Path to job_criteria.yaml criteria file (relative to src/ or absolute)")
     parser.add_argument("--reset-candidate", action="store_true", help="Clean candidate files and return settings to default stubs")
     parser.add_argument("--send-email", action="store_true", help="Send email summaries for all successfully applied jobs")
+    parser.add_argument("--pipeline", action="store_true", help="Use GDPR-compliant pipeline: official APIs, local LLM, email drafts")
     parser.add_argument("--headless", action="store_true", help="Run Chrome in headless mode (no visible browser window)")
     parser.add_argument("--no-email", action="store_true", help="Skip direct email sending to employers during testing")
     parser.add_argument("--debug", action="store_true", help="[DEBUG] Enable verbose debug output at bottleneck points")
@@ -2455,7 +2457,7 @@ def main():
     restore_active_configs_from_samples(workspace_dir, config_path, criteria_path, profile_path, prompts_path)
     
     # Bypassing the config GUI for CLI-only or testing operations
-    is_cli_only = args.parse_cv or args.test_score or args.test_anschreiben or args.generate_dummy_cv or args.send_email or args.headless or args.url or args.interactive
+    is_cli_only = args.parse_cv or args.test_score or args.test_anschreiben or args.generate_dummy_cv or args.send_email or args.headless or args.url or args.interactive or args.pipeline
     # --search-jobs without --headless should still show the GUI before launching
     if not is_cli_only or (args.search_jobs is not None and not args.headless):
         run_config_gui(config_path, criteria_path, profile_path, prompts_path)
@@ -2491,6 +2493,12 @@ def main():
         # Fallback to config.yaml cv_path if not indexed
         cv_name = config["user_profile"].get("cv_path", "Lebenslauf_UserName.pdf")
         cv_path = os.path.join(workspace_dir, cv_name)
+
+    if args.pipeline:
+        run_pipeline_mode(workspace_dir, config, criteria_path, profile_path,
+                          args.search_jobs, args.location, args.radius, args.force_generate,
+                          args.auto_approve)
+        return
 
     if args.parse_cv:
         parse_cv(cv_path, profile_path, criteria_path)
