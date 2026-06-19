@@ -73,22 +73,30 @@ def search_bundesagentur(
             print(f"{Colors.YELLOW}[BA API] JSON parse error on page {page}: {e}{Colors.END}")
             break
 
-        # Extract jobs from response
-        stellenangebote = data.get("stellenangebote", [])
+        # Extract jobs from response — BA API v6 uses "ergebnisliste"
+        # (older v5 used "stellenangebote")
+        stellenangebote = data.get("ergebnisliste", data.get("stellenangebote", []))
         if not stellenangebote:
             print(f"{Colors.GREY}[BA API] No more results on page {page}.{Colors.END}")
             break
 
         for item in stellenangebote:
-            ref = item.get("refnr", "")
+            ref = item.get("referenznummer", "")  # v6: referenznummer (not refnr)
             if ref in seen_refs:
                 continue
             seen_refs.add(ref)
 
-            title = item.get("beruf", "") or item.get("titel", "") or "Unbekannt"
+            # Title: v6 uses "stellenangebotsTitel" (not "titel")
+            title = item.get("stellenangebotsTitel", "") or item.get("titel", "")
+            # Also try hauptberuf if title is empty
+            if not title:
+                hb = item.get("hauptberuf", {})
+                title = hb.get("label", "") if isinstance(hb, dict) else ""
+            title = title or "Unbekannt"
+
             company = _extract_company(item) or "Unbekannt"
             location_str = _extract_location(item) or location
-            url = f"https://www.arbeitsagentur.de/jobsuche/{ref}" if ref else ""
+            url = item.get("externeURL", "") or (f"https://www.arbeitsagentur.de/jobsuche/{ref}" if ref else "")
             description = _extract_description(item)
             salary = _extract_salary(item)
             job_type = _extract_job_type(item)
@@ -113,16 +121,37 @@ def search_bundesagentur(
 
 
 def _extract_company(item: dict) -> Optional[str]:
-    """Extract company name from a BA job item."""
+    """Extract company name from a BA job item.
+    v6 API uses "firma" field directly as a string.
+    """
+    firma: str = item.get("firma", "") or ""
+    if firma:
+        return firma.strip()
+    # Fallback: older field names
     arbeitgeber = item.get("arbeitgeber", "") or ""
     if arbeitgeber:
         return arbeitgeber.strip()
-    result: str = item.get("unternehmen", "") or ""
-    return result if result else None
+    return None
 
 
 def _extract_location(item: dict) -> Optional[str]:
-    """Extract location string from a BA job item."""
+    """Extract location string from a BA job item.
+    v6 API uses "stellenlokationen" (list of dicts with plz, ort).
+    """
+    lokationen = item.get("stellenlokationen", [])
+    if isinstance(lokationen, list) and lokationen:
+        parts: list[str] = []
+        for loc in lokationen[:2]:  # max 2 locations
+            if isinstance(loc, dict):
+                plz = loc.get("plz", "")
+                ort = loc.get("ort", "")
+                if plz and ort:
+                    parts.append(f"{plz} {ort}")
+                elif ort:
+                    parts.append(ort)
+        if parts:
+            return ", ".join(parts)
+    # Fallback: older "ort" field
     ort = item.get("ort", {})
     if isinstance(ort, dict):
         plz = ort.get("plz", "")
@@ -134,14 +163,18 @@ def _extract_location(item: dict) -> Optional[str]:
 
 
 def _extract_description(item: dict) -> str:
-    """Build a text description from all available fields."""
+    """Build a text description from all available fields.
+    v6 API uses "stellenangebotsTitel" and "hauptberuf" instead of "titel"/"beruf".
+    """
     parts: list[str] = []
-    titel = item.get("titel", "")
-    beruf = item.get("beruf", "")
+    titel = item.get("stellenangebotsTitel", "") or item.get("titel", "")
     if titel:
         parts.append(f"Titel: {titel}")
-    if beruf and beruf != titel:
-        parts.append(f"Beruf: {beruf}")
+    hb = item.get("hauptberuf", {})
+    if isinstance(hb, dict):
+        beruf_label = hb.get("label", "")
+        if beruf_label and beruf_label != titel:
+            parts.append(f"Beruf: {beruf_label}")
     for key in ("kurzbeschreibung", "beschreibung", "aufgaben", "qualifikationen"):
         val = item.get(key, "")
         if val:
@@ -150,7 +183,18 @@ def _extract_description(item: dict) -> str:
 
 
 def _extract_salary(item: dict) -> Optional[str]:
-    """Extract salary info if available."""
+    """Extract salary info if available.
+    v6 API uses "verguetungsangabe" dict.
+    """
+    vg = item.get("verguetungsangabe", {})
+    if isinstance(vg, dict):
+        von = vg.get("von", "")
+        bis = vg.get("bis", "")
+        if von and bis:
+            return f"{von} - {bis} EUR"
+        elif von:
+            return f"ab {von} EUR"
+    # Fallback: older "verguetung" field
     verguetung = item.get("verguetung", {})
     if isinstance(verguetung, dict):
         von = verguetung.get("von", "")
@@ -163,10 +207,24 @@ def _extract_salary(item: dict) -> Optional[str]:
 
 
 def _extract_job_type(item: dict) -> Optional[str]:
-    """Extract job type (Vollzeit/Teilzeit)."""
+    """Extract job type (Vollzeit/Teilzeit).
+    v6 API uses boolean flags like "arbeitszeitVollzeit", "arbeitszeitTeilzeit*".
+    """
+    types: list[str] = []
+    if item.get("arbeitszeitVollzeit"):
+        types.append("Vollzeit")
+    teilzeit_keys = ["arbeitszeitTeilzeitVormittag", "arbeitszeitTeilzeitNachmittag",
+                     "arbeitszeitTeilzeitAbend", "arbeitszeitTeilzeitFlexibel"]
+    if any(item.get(k) for k in teilzeit_keys):
+        types.append("Teilzeit")
+    if item.get("arbeitszeitSchichtNachtWochenende"):
+        types.append("Schicht/Nacht/Wochenende")
+    if types:
+        return ", ".join(types)
+    # Fallback: older "arbeitszeit" field
     az = item.get("arbeitszeit", "")
-    if isinstance(az, str):
+    if isinstance(az, str) and az:
         return az
-    if isinstance(az, list):
+    if isinstance(az, list) and az:
         return ", ".join(az)
     return None
