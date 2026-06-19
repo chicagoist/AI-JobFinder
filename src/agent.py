@@ -1705,7 +1705,8 @@ def get_browser_context(playwright_instance, config, headless=False):
         print(f"\n{Colors.RED}FAILED TO LAUNCH PERSISTENT CONTEXT: {e}{Colors.END}")
         
         # If the error is likely a lock error — kill existing Chrome, relaunch with CDP
-        if "lock" in str(e).lower() or "used by another process" in str(e).lower() or "Target page, context or browser has been closed" in str(e):
+                err = str(e).lower()
+        if "lock" in err or "used by another" in err or "has been closed" in err or "timeout 60000ms" in err:
             print(f"{Colors.YELLOW}Browser profile in use. Restarting Chrome with CDP on port 9222...{Colors.END}")
             import subprocess
             if found_cmd:
