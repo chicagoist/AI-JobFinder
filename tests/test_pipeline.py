@@ -7,6 +7,7 @@ or:
     python -m unittest tests.test_pipeline -v
 """
 
+import io
 import os
 import sys
 import json
@@ -16,7 +17,7 @@ from unittest.mock import patch, MagicMock
 # Ensure src/ is on the path
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "src"))
 
-from job_agent.pipeline import JobPipeline, ProcessResult
+from job_agent.pipeline import JobPipeline, ProcessResult, run_pipeline_mode
 from job_agent.job_sources import JobPosting
 
 
@@ -593,6 +594,126 @@ class TestNormalizeProfile(BasePipelineTest):
         result = self.pipeline._normalize_profile(profile)
 
         self.assertEqual(result["certifications"], ["AWS Certified", "Cisco CCNA"])
+
+
+# ---------------------------------------------------------------------------
+# Test: Ollama guard — run_pipeline_mode early exit
+# ---------------------------------------------------------------------------
+
+
+class TestOllamaGuard(unittest.TestCase):
+    """Test early exit in run_pipeline_mode when Ollama is unavailable."""
+
+    def _make_pipeline_mock(self):
+        """Create a mock JobPipeline that doesn't touch the filesystem."""
+        mock_pipeline = MagicMock()
+        mock_pipeline.candidate_profile = {}
+        mock_pipeline.search.return_value = []
+        return mock_pipeline
+
+    def test_ollama_unavailable_exits_early(self):
+        """When Ollama is down + local priority + no cloud fallback,
+        run_pipeline_mode returns before searching or processing any jobs."""
+        with patch("job_agent.pipeline.ollama_available", return_value=False), \
+             patch("job_agent.pipeline.PRIORITY_LLM", "local"), \
+             patch("job_agent.pipeline.ALLOW_CLOUD_FALLBACK", False), \
+             patch("job_agent.pipeline.JobPipeline") as mock_pipeline_cls, \
+             patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+
+            mock_pipeline_cls.return_value = self._make_pipeline_mock()
+
+            result = run_pipeline_mode(
+                workspace_dir="/tmp/test_ollama",
+                config={"search": {"max_results": 25}},
+                criteria_path="/tmp/criteria.yaml",
+                profile_path="/tmp/profile.json",
+                search_jobs="Python",
+                location="Berlin",
+                radius=25,
+            )
+
+            # Function returns None (implicit) — no exception
+            self.assertIsNone(result)
+
+            # search() must NOT have been called on the pipeline
+            mock_pipeline_cls.return_value.search.assert_not_called()
+
+            # Error banner present in stdout
+            output = mock_stdout.getvalue()
+            self.assertIn("Local LLM required", output)
+            self.assertIn("ollama serve", output)
+
+    def test_ollama_available_proceeds(self):
+        """When Ollama IS running, run_pipeline_mode proceeds past the guard."""
+        with patch("job_agent.pipeline.ollama_available", return_value=True), \
+             patch("job_agent.pipeline.PRIORITY_LLM", "local"), \
+             patch("job_agent.pipeline.ALLOW_CLOUD_FALLBACK", False), \
+             patch("job_agent.pipeline.JobPipeline") as mock_pipeline_cls, \
+             patch("sys.stdout", new_callable=io.StringIO):
+
+            mock_pipeline_cls.return_value = self._make_pipeline_mock()
+
+            result = run_pipeline_mode(
+                workspace_dir="/tmp/test_ollama",
+                config={"search": {"max_results": 25}},
+                criteria_path="/tmp/criteria.yaml",
+                profile_path="/tmp/profile.json",
+                search_jobs="Python",
+                location="Berlin",
+                radius=25,
+            )
+
+            self.assertIsNone(result)
+            # search() WAS called (guard didn't block)
+            mock_pipeline_cls.return_value.search.assert_called_once()
+
+    def test_cloud_fallback_allowed_skips_guard(self):
+        """When ALLOW_CLOUD_FALLBACK=True, guard is skipped even if Ollama down."""
+        with patch("job_agent.pipeline.ollama_available", return_value=False), \
+             patch("job_agent.pipeline.PRIORITY_LLM", "local"), \
+             patch("job_agent.pipeline.ALLOW_CLOUD_FALLBACK", True), \
+             patch("job_agent.pipeline.JobPipeline") as mock_pipeline_cls, \
+             patch("sys.stdout", new_callable=io.StringIO):
+
+            mock_pipeline_cls.return_value = self._make_pipeline_mock()
+
+            result = run_pipeline_mode(
+                workspace_dir="/tmp/test_ollama",
+                config={"search": {"max_results": 25}},
+                criteria_path="/tmp/criteria.yaml",
+                profile_path="/tmp/profile.json",
+                search_jobs="Python",
+                location="Berlin",
+                radius=25,
+            )
+
+            self.assertIsNone(result)
+            # search() WAS called — cloud fallback allowed, no block
+            mock_pipeline_cls.return_value.search.assert_called_once()
+
+    def test_gemini_priority_skips_guard(self):
+        """When PRIORITY_LLM is not 'local', guard is skipped."""
+        with patch("job_agent.pipeline.ollama_available", return_value=False), \
+             patch("job_agent.pipeline.PRIORITY_LLM", "gemini"), \
+             patch("job_agent.pipeline.ALLOW_CLOUD_FALLBACK", False), \
+             patch("job_agent.pipeline.JobPipeline") as mock_pipeline_cls, \
+             patch("sys.stdout", new_callable=io.StringIO):
+
+            mock_pipeline_cls.return_value = self._make_pipeline_mock()
+
+            result = run_pipeline_mode(
+                workspace_dir="/tmp/test_ollama",
+                config={"search": {"max_results": 25}},
+                criteria_path="/tmp/criteria.yaml",
+                profile_path="/tmp/profile.json",
+                search_jobs="Python",
+                location="Berlin",
+                radius=25,
+            )
+
+            self.assertIsNone(result)
+            # search() WAS called — gemini priority, no block
+            mock_pipeline_cls.return_value.search.assert_called_once()
 
 
 if __name__ == "__main__":
