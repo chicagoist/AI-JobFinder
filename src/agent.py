@@ -11,7 +11,8 @@ import job_agent.utils
 from job_agent.utils import Colors, clean_and_repair_json, TeeStdout
 from job_agent.config import load_config, load_criteria, load_prompts, restore_active_configs_from_samples, DEFAULT_PROMPTS, PROMPTS
 from job_agent.db import init_db, log_application, get_past_rejections
-from job_agent.llm import init_gemini, llm_request_with_fallback, PRIORITY_LLM, ALLOW_CLOUD_FALLBACK, LOCAL_MODEL
+from job_agent import llm as llm_module
+from job_agent.llm import init_gemini, llm_request_with_fallback
 from job_agent.ollama_llm import ollama_available
 from job_agent.pipeline import run_pipeline_mode
 # sync_playwright imported locally where needed (PDF rendering)
@@ -1441,8 +1442,8 @@ def main():
     # Covers --parse-cv, --test-score, --test-anschreiben (all call LLM)
     if args.parse_cv or args.test_score or args.test_anschreiben:
         init_gemini()  # Load globals from config
-        if PRIORITY_LLM == "local" and not ALLOW_CLOUD_FALLBACK:
-            if not ollama_available(LOCAL_MODEL):
+        if llm_module.PRIORITY_LLM == "local" and not llm_module.ALLOW_CLOUD_FALLBACK:
+            if not ollama_available(llm_module.LOCAL_MODEL):
                 if args.ignore_ollama:
                     print(f"\n{Colors.YELLOW}{Colors.BOLD}⚠ [1mLocal LLM required but Ollama is not running.{Colors.END}")
                     print(f"{Colors.YELLOW}  Proceeding due to --ignore-ollama flag. Jobs will score 0/10.{Colors.END}")
@@ -1451,8 +1452,8 @@ def main():
                     print(f"\n{Colors.RED}{Colors.BOLD}{'='*60}{Colors.END}")
                     print(f"{Colors.RED}{Colors.BOLD}  ❌ Local LLM required. Start Ollama:{Colors.END}")
                     print(f"{Colors.CYAN}     ollama serve{Colors.END}")
-                    print(f"{Colors.GREY}     Or if already installed: ollama run {LOCAL_MODEL}{Colors.END}")
-                    print(f"{Colors.GREY}     Model needed: {LOCAL_MODEL}{Colors.END}")
+                    print(f"{Colors.GREY}     Or if already installed: ollama run {llm_module.LOCAL_MODEL}{Colors.END}")
+                    print(f"{Colors.GREY}     Model needed: {llm_module.LOCAL_MODEL}{Colors.END}")
                     print(f"{Colors.RED}{Colors.BOLD}{'='*60}{Colors.END}\n")
                     return
 

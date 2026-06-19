@@ -29,7 +29,8 @@ from dataclasses import dataclass
 from job_agent.utils import Colors, clean_and_repair_json, TeeStdout
 from job_agent.config import load_config, load_criteria, PROMPTS
 from job_agent.db import init_db, log_application, get_past_rejections
-from job_agent.llm import init_gemini, llm_request_with_fallback, PRIORITY_LLM, ALLOW_CLOUD_FALLBACK, LOCAL_MODEL
+from job_agent import llm as _llm
+from job_agent.llm import init_gemini, llm_request_with_fallback
 from job_agent.ollama_llm import ollama_available
 from job_agent.job_sources import search_all_sources, JobPosting
 from job_agent.email_draft_generator import generate_email_draft
@@ -1152,8 +1153,8 @@ def run_pipeline_mode(
     pipeline.initialize()
 
     # --- Early exit: Local LLM required but Ollama is not running ---
-    if PRIORITY_LLM == "local" and not ALLOW_CLOUD_FALLBACK:
-        if not ollama_available(LOCAL_MODEL):
+    if _llm.PRIORITY_LLM == "local" and not _llm.ALLOW_CLOUD_FALLBACK:
+        if not ollama_available(_llm.LOCAL_MODEL):
             if ignore_ollama:
                 print(f"\n{Colors.YELLOW}{Colors.BOLD}{'='*60}{Colors.END}")
                 print(f"{Colors.YELLOW}{Colors.BOLD}  Warning: Local LLM required but Ollama is not running.{Colors.END}")
@@ -1164,8 +1165,8 @@ def run_pipeline_mode(
                 print(f"\n{Colors.RED}{Colors.BOLD}{'='*60}{Colors.END}")
                 print(f"{Colors.RED}{Colors.BOLD}  ❌ Local LLM required. Start Ollama:{Colors.END}")
                 print(f"{Colors.CYAN}     ollama serve{Colors.END}")
-                print(f"{Colors.GREY}     Or if already installed: ollama run {LOCAL_MODEL}{Colors.END}")
-                print(f"{Colors.GREY}     Model needed: {LOCAL_MODEL}{Colors.END}")
+                print(f"{Colors.GREY}     Or if already installed: ollama run {_llm.LOCAL_MODEL}{Colors.END}")
+                print(f"{Colors.GREY}     Model needed: {_llm.LOCAL_MODEL}{Colors.END}")
                 print(f"{Colors.RED}{Colors.BOLD}{'='*60}{Colors.END}\n")
                 return
 

@@ -629,8 +629,8 @@ class TestOllamaGuard(unittest.TestCase):
         """When Ollama is down + local priority + no cloud fallback,
         run_pipeline_mode returns before searching or processing any jobs."""
         with patch("job_agent.pipeline.ollama_available", return_value=False), \
-             patch("job_agent.pipeline.PRIORITY_LLM", "local"), \
-             patch("job_agent.pipeline.ALLOW_CLOUD_FALLBACK", False), \
+             patch("job_agent.llm.PRIORITY_LLM", "local"), \
+             patch("job_agent.llm.ALLOW_CLOUD_FALLBACK", False), \
              patch("job_agent.pipeline.JobPipeline") as mock_pipeline_cls, \
              patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
 
@@ -646,8 +646,8 @@ class TestOllamaGuard(unittest.TestCase):
     def test_ignore_ollama_bypasses_guard(self):
         """With --ignore-ollama=True, guard prints warning but PROCEEDS."""
         with patch("job_agent.pipeline.ollama_available", return_value=False), \
-             patch("job_agent.pipeline.PRIORITY_LLM", "local"), \
-             patch("job_agent.pipeline.ALLOW_CLOUD_FALLBACK", False), \
+             patch("job_agent.llm.PRIORITY_LLM", "local"), \
+             patch("job_agent.llm.ALLOW_CLOUD_FALLBACK", False), \
              patch("job_agent.pipeline.JobPipeline") as mock_pipeline_cls, \
              patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
 
@@ -665,8 +665,8 @@ class TestOllamaGuard(unittest.TestCase):
     def test_ollama_available_proceeds(self):
         """When Ollama IS running, run_pipeline_mode proceeds past the guard."""
         with patch("job_agent.pipeline.ollama_available", return_value=True), \
-             patch("job_agent.pipeline.PRIORITY_LLM", "local"), \
-             patch("job_agent.pipeline.ALLOW_CLOUD_FALLBACK", False), \
+             patch("job_agent.llm.PRIORITY_LLM", "local"), \
+             patch("job_agent.llm.ALLOW_CLOUD_FALLBACK", False), \
              patch("job_agent.pipeline.JobPipeline") as mock_pipeline_cls, \
              patch("sys.stdout", new_callable=io.StringIO):
 
@@ -679,8 +679,8 @@ class TestOllamaGuard(unittest.TestCase):
     def test_cloud_fallback_allowed_skips_guard(self):
         """When ALLOW_CLOUD_FALLBACK=True, guard is skipped even if Ollama down."""
         with patch("job_agent.pipeline.ollama_available", return_value=False), \
-             patch("job_agent.pipeline.PRIORITY_LLM", "local"), \
-             patch("job_agent.pipeline.ALLOW_CLOUD_FALLBACK", True), \
+             patch("job_agent.llm.PRIORITY_LLM", "local"), \
+             patch("job_agent.llm.ALLOW_CLOUD_FALLBACK", True), \
              patch("job_agent.pipeline.JobPipeline") as mock_pipeline_cls, \
              patch("sys.stdout", new_callable=io.StringIO):
 
@@ -693,8 +693,8 @@ class TestOllamaGuard(unittest.TestCase):
     def test_gemini_priority_skips_guard(self):
         """When PRIORITY_LLM is not 'local', guard is skipped."""
         with patch("job_agent.pipeline.ollama_available", return_value=False), \
-             patch("job_agent.pipeline.PRIORITY_LLM", "gemini"), \
-             patch("job_agent.pipeline.ALLOW_CLOUD_FALLBACK", False), \
+             patch("job_agent.llm.PRIORITY_LLM", "gemini"), \
+             patch("job_agent.llm.ALLOW_CLOUD_FALLBACK", False), \
              patch("job_agent.pipeline.JobPipeline") as mock_pipeline_cls, \
              patch("sys.stdout", new_callable=io.StringIO):
 
