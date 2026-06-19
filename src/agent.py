@@ -1704,17 +1704,34 @@ def get_browser_context(playwright_instance, config, headless=False):
     except Exception as e:
         print(f"\n{Colors.RED}FAILED TO LAUNCH PERSISTENT CONTEXT: {e}{Colors.END}")
         
-        # If the error is likely a lock error
+        # If the error is likely a lock error — kill existing Chrome, relaunch with CDP
         if "lock" in str(e).lower() or "used by another process" in str(e).lower() or "Target page, context or browser has been closed" in str(e):
-            print(f"{Colors.YELLOW}{'!'*60}")
-            print(f"THE BROWSER PROFILE IS CURRENTLY IN USE.")
-            print(f"To use your existing session (and avoid re-logging), please:")
-            print(f"1. CLOSE ALL Windows of your browser completely.")
-            print(f"2. OR: Restart your browser with remote debugging enabled:")
-            print(f"   Windows: chrome.exe --remote-debugging-port=9222")
-            print(f"   Linux: google-chrome --remote-debugging-port=9222")
-            print(f"{'!'*60}{Colors.END}")
-            
+            print(f"{Colors.YELLOW}Browser profile in use. Restarting Chrome with CDP on port 9222...{Colors.END}")
+            import subprocess
+            if found_cmd:
+                try:
+                    # Kill existing Chrome using this profile (Linux/macOS only; on Windows falls to temp_profile)
+                    subprocess.run(["pkill", "-f", f"chrome.*{data_dir}"], stderr=subprocess.DEVNULL)
+                    time.sleep(2)
+                    # Launch fresh with CDP
+                    subprocess.Popen([
+                        found_cmd,
+                        f'--user-data-dir={data_dir}',
+                        f'--profile-directory={profile}',
+                        '--remote-debugging-port=9222'
+                    ], stdout=subprocess.DEVNULL)
+                    # Wait for CDP endpoint
+                    for _ in range(15):
+                        try:
+                            urllib.request.urlopen("http://127.0.0.1:9222/json/version", timeout=1)
+                            print(f"{Colors.GREEN}Connected to Chrome via CDP.{Colors.END}")
+                            browser = playwright_instance.chromium.connect_over_cdp("http://127.0.0.1:9222")
+                            return browser.contexts[0] if browser.contexts else browser.new_context(), browser, True
+                        except Exception:
+                            time.sleep(1)
+                except Exception as launch_e:
+                    print(f"{Colors.RED}Failed to restart Chrome: {launch_e}{Colors.END}")
+
             print(f"{Colors.YELLOW}Auto-fallback to temporary profile...{Colors.END}")
         
         # Final fallback: temp profile in current directory
