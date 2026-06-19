@@ -9,6 +9,7 @@ from google.genai import errors as genai_errors
 from job_agent.config import load_config
 from job_agent.utils import Colors, clean_and_repair_json, force_ipv4
 from job_agent.openrouter_llm import call_openrouter
+from job_agent.ollama_llm import call_ollama, ollama_available, DEFAULT_MODEL
 
 # Global state for API key rotation and fallback models
 API_KEYS = [
@@ -22,10 +23,12 @@ CURRENT_KEY_INDEX = 0
 GEMINI_MODEL = "gemini-2.5-flash"
 IS_CONFIG_DRIVEN_KEYS = False
 INITIALIZED = False
-PRIORITY_LLM = "gemini"  # "gemini" or "openrouter"
+PRIORITY_LLM = "local"  # "local" | "openrouter" | "gemini"
+LOCAL_MODEL = DEFAULT_MODEL  # Ollama model name
+
 
 def init_gemini(config_path=None, force=False):
-    global CURRENT_KEY_INDEX, API_KEYS, GEMINI_MODEL, IS_CONFIG_DRIVEN_KEYS, INITIALIZED, KEY_STATUS, PRIORITY_LLM
+    global CURRENT_KEY_INDEX, API_KEYS, GEMINI_MODEL, IS_CONFIG_DRIVEN_KEYS, INITIALIZED, KEY_STATUS, PRIORITY_LLM, LOCAL_MODEL
     
     if INITIALIZED and not force:
         return
@@ -42,9 +45,14 @@ def init_gemini(config_path=None, force=False):
         model_val = config.get("gemini", {}).get("model")
         if model_val:
             GEMINI_MODEL = model_val
-        priority = config.get("llm", {}).get("priority", "gemini")
-        if priority in ("gemini", "openrouter"):
+        # Read LLM priority: local > openrouter > gemini
+        priority = config.get("llm", {}).get("priority", "local")
+        if priority in ("local", "gemini", "openrouter"):
             PRIORITY_LLM = priority
+        # Read local model name
+        local_model = config.get("llm", {}).get("local_model", DEFAULT_MODEL)
+        if local_model:
+            LOCAL_MODEL = local_model
     except Exception:
         pass
 
@@ -66,6 +74,7 @@ def init_gemini(config_path=None, force=False):
             api_key = API_KEYS[CURRENT_KEY_INDEX]
             print(f"Using default configured API key index {CURRENT_KEY_INDEX}")
     INITIALIZED = True
+
 
 def generate_content_with_retry(model_name, prompt, max_retries=3, initial_delay=2.0, max_delay=15.0, **kwargs):
     global GEMINI_MODEL, CURRENT_KEY_INDEX, API_KEYS, IS_CONFIG_DRIVEN_KEYS, KEY_STATUS
@@ -182,29 +191,58 @@ def generate_content_with_retry(model_name, prompt, max_retries=3, initial_delay
 
             print(f"\n{Colors.RED}[Gemini API] ERROR: All models and all API keys are exhausted!{Colors.END}")
             return None
+
+
 def llm_request_with_fallback(prompt, **kwargs):
     """
-    Tries the priority LLM first (Gemini with rotation or Groq).
-    On failure, falls back to the other LLM.
+    Tries LLMs in priority order:
+    1. Local (Ollama) — GDPR compliant, no data leaves the machine
+    2. OpenRouter — free fallback
+    3. Gemini — last resort fallback with key rotation
     """
-    global PRIORITY_LLM
+    global PRIORITY_LLM, LOCAL_MODEL
 
-    if PRIORITY_LLM == "openrouter":
-        print(f"{Colors.CYAN}[LLM] Priority: OpenRouter (free). Trying OpenRouter first...{Colors.END}")
+    # --- Priority: LOCAL (Ollama) ---
+    if PRIORITY_LLM == "local":
+        print(f"{Colors.CYAN}[LLM] Priority: Local ({LOCAL_MODEL}). Trying Ollama...{Colors.END}")
+        if ollama_available(LOCAL_MODEL):
+            local_resp = call_ollama(prompt, model=LOCAL_MODEL)
+            if local_resp:
+                # Wrap response in a simple object that mimics gemini response format
+                class LocalResponse:
+                    def __init__(self, text):
+                        self.text = text
+                return LocalResponse(local_resp)
+            print(f"{Colors.YELLOW}[LLM] Local LLM returned no response. Trying fallbacks...{Colors.END}")
+        else:
+            print(f"{Colors.YELLOW}[LLM] Ollama not available. Run: bash scripts/setup_local_llm.sh{Colors.END}")
+        
+        # Fallback to OpenRouter
+        print(f"{Colors.CYAN}[LLM] Trying OpenRouter fallback...{Colors.END}")
         or_resp = call_openrouter(prompt, **kwargs)
         if or_resp:
             return or_resp
-        print(f"{Colors.YELLOW}[LLM] OpenRouter failed or unavailable. Falling back to Gemini...{Colors.END}")
+        
+        # Final fallback to Gemini
+        print(f"{Colors.CYAN}[LLM] Trying Gemini fallback...{Colors.END}")
         return generate_content_with_retry(GEMINI_MODEL, prompt, **kwargs)
 
-    # Default: try Gemini with rotation first
-    try:
-        return generate_content_with_retry(GEMINI_MODEL, prompt, **kwargs)
-    except Exception as e:
-        print(f"\n{Colors.RED}[Gemini API] Failed: {e}. Trying OpenRouter fallback...{Colors.END}")
+    # --- Priority: OPENROUTER ---
+    elif PRIORITY_LLM == "openrouter":
+        print(f"{Colors.CYAN}[LLM] Priority: OpenRouter. Trying first...{Colors.END}")
         or_resp = call_openrouter(prompt, **kwargs)
         if or_resp:
             return or_resp
-        raise RuntimeError("Both Gemini and OpenRouter failed.")
+        print(f"{Colors.YELLOW}[LLM] OpenRouter failed. Trying Gemini...{Colors.END}")
+        return generate_content_with_retry(GEMINI_MODEL, prompt, **kwargs)
 
-
+    # --- Priority: GEMINI (with local fallback first for GDPR) ---
+    else:  # "gemini"
+        try:
+            return generate_content_with_retry(GEMINI_MODEL, prompt, **kwargs)
+        except Exception as e:
+            print(f"\n{Colors.RED}[Gemini API] Failed: {e}. Trying OpenRouter fallback...{Colors.END}")
+            or_resp = call_openrouter(prompt, **kwargs)
+            if or_resp:
+                return or_resp
+            raise RuntimeError("Both Gemini and OpenRouter failed.")

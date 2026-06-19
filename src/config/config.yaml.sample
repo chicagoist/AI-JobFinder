@@ -1,6 +1,6 @@
 user_profile:
   # Path to your Chrome user data directory
-  # Windows: "C:\\Users\\<Username>\\AppData\\Local\\Google\\Chrome\\User Data"
+  # Windows: "C:\\\\Users\\\\<Username>\\\\AppData\\\\Local\\\\Google\\\\Chrome\\\\User Data"
   # Linux:   "~/.config/google-chrome" or "/home/<User>/.config/google-chrome"
   # macOS:   "~/Library/Application Support/Google/Chrome"
   chrome_data_dir: "~/.config/google-chrome"
@@ -36,7 +36,14 @@ gemini:
     - "<YOUR_GEMINI_API_KEY_5>"
 
 llm:
-  priority: "gemini"       # "gemini" or "openrouter" — primary LLM; falls back to other on failure
+  # Priority: "local" | "openrouter" | "gemini"
+  # "local" (default) — uses Ollama. Fully GDPR compliant, no data leaves your machine.
+  # "openrouter" — tries OpenRouter first, Gemini fallback.
+  # "gemini" — tries Google Gemini first, OpenRouter fallback.
+  priority: "local"
+  # Local model name (for priority: "local"). Install with: bash scripts/setup_local_llm.sh
+  # Recommended: qwen2.5:7b (~4.4GB), llama3.1:8b, mistral:7b
+  local_model: "qwen2.5:7b"
 
 openrouter:
   api_key: "<YOUR_OPENROUTER_API_KEY>"   # sk-or-v1-... — also read from env OPENROUTER_API_KEY
@@ -47,4 +54,3 @@ smtp:
   port: 587
   username: "<YOUR_EMAIL>@gmail.com"
   password: "<YOUR_SMTP_PASSWORD_OR_APP_PASSWORD>"
-
