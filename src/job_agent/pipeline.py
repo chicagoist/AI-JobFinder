@@ -1127,6 +1127,7 @@ def run_pipeline_mode(
     radius: int,
     force_generate: bool = False,
     auto_approve: bool = False,
+    ignore_ollama: bool = False,
 ) -> None:
     """Run the GDPR-compliant pipeline from the CLI.
 
@@ -1153,13 +1154,20 @@ def run_pipeline_mode(
     # --- Early exit: Local LLM required but Ollama is not running ---
     if PRIORITY_LLM == "local" and not ALLOW_CLOUD_FALLBACK:
         if not ollama_available(LOCAL_MODEL):
-            print(f"\n{Colors.RED}{Colors.BOLD}{'='*60}{Colors.END}")
-            print(f"{Colors.RED}{Colors.BOLD}  ❌ Local LLM required. Start Ollama:{Colors.END}")
-            print(f"{Colors.CYAN}     ollama serve{Colors.END}")
-            print(f"{Colors.GREY}     Or if already installed: ollama run {LOCAL_MODEL}{Colors.END}")
-            print(f"{Colors.GREY}     Model needed: {LOCAL_MODEL}{Colors.END}")
-            print(f"{Colors.RED}{Colors.BOLD}{'='*60}{Colors.END}\n")
-            return
+            if ignore_ollama:
+                print(f"\n{Colors.YELLOW}{Colors.BOLD}{'='*60}{Colors.END}")
+                print(f"{Colors.YELLOW}{Colors.BOLD}  Warning: Local LLM required but Ollama is not running.{Colors.END}")
+                print(f"{Colors.YELLOW}  Proceeding due to --ignore-ollama flag. Jobs will score 0/10.{Colors.END}")
+                print(f"{Colors.YELLOW}  Start Ollama for real results: ollama serve{Colors.END}")
+                print(f"{Colors.YELLOW}{Colors.BOLD}{'='*60}{Colors.END}\n")
+            else:
+                print(f"\n{Colors.RED}{Colors.BOLD}{'='*60}{Colors.END}")
+                print(f"{Colors.RED}{Colors.BOLD}  ❌ Local LLM required. Start Ollama:{Colors.END}")
+                print(f"{Colors.CYAN}     ollama serve{Colors.END}")
+                print(f"{Colors.GREY}     Or if already installed: ollama run {LOCAL_MODEL}{Colors.END}")
+                print(f"{Colors.GREY}     Model needed: {LOCAL_MODEL}{Colors.END}")
+                print(f"{Colors.RED}{Colors.BOLD}{'='*60}{Colors.END}\n")
+                return
 
     # Index candidate documents
     pipeline.index_documents()

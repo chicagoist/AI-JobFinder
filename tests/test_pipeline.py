@@ -611,6 +611,20 @@ class TestOllamaGuard(unittest.TestCase):
         mock_pipeline.search.return_value = []
         return mock_pipeline
 
+    def _call_pipeline(self, **kwargs):
+        """Helper: call run_pipeline_mode with defaults, override any kwarg."""
+        defaults = dict(
+            workspace_dir="/tmp/test_ollama",
+            config={"search": {"max_results": 25}},
+            criteria_path="/tmp/criteria.yaml",
+            profile_path="/tmp/profile.json",
+            search_jobs="Python",
+            location="Berlin",
+            radius=25,
+        )
+        defaults.update(kwargs)
+        return run_pipeline_mode(**defaults)
+
     def test_ollama_unavailable_exits_early(self):
         """When Ollama is down + local priority + no cloud fallback,
         run_pipeline_mode returns before searching or processing any jobs."""
@@ -621,27 +635,32 @@ class TestOllamaGuard(unittest.TestCase):
              patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
 
             mock_pipeline_cls.return_value = self._make_pipeline_mock()
+            result = self._call_pipeline()
 
-            result = run_pipeline_mode(
-                workspace_dir="/tmp/test_ollama",
-                config={"search": {"max_results": 25}},
-                criteria_path="/tmp/criteria.yaml",
-                profile_path="/tmp/profile.json",
-                search_jobs="Python",
-                location="Berlin",
-                radius=25,
-            )
-
-            # Function returns None (implicit) — no exception
             self.assertIsNone(result)
-
-            # search() must NOT have been called on the pipeline
             mock_pipeline_cls.return_value.search.assert_not_called()
-
-            # Error banner present in stdout
             output = mock_stdout.getvalue()
             self.assertIn("Local LLM required", output)
             self.assertIn("ollama serve", output)
+
+    def test_ignore_ollama_bypasses_guard(self):
+        """With --ignore-ollama=True, guard prints warning but PROCEEDS."""
+        with patch("job_agent.pipeline.ollama_available", return_value=False), \
+             patch("job_agent.pipeline.PRIORITY_LLM", "local"), \
+             patch("job_agent.pipeline.ALLOW_CLOUD_FALLBACK", False), \
+             patch("job_agent.pipeline.JobPipeline") as mock_pipeline_cls, \
+             patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+
+            mock_pipeline_cls.return_value = self._make_pipeline_mock()
+            result = self._call_pipeline(ignore_ollama=True)
+
+            self.assertIsNone(result)
+            # search() WAS called — ignore-ollama bypassed the block
+            mock_pipeline_cls.return_value.search.assert_called_once()
+            # Warning is printed but not a red error
+            output = mock_stdout.getvalue()
+            self.assertIn("Proceeding", output)
+            self.assertNotIn("\u274c", output)  # No ❌ emoji (only in error block)
 
     def test_ollama_available_proceeds(self):
         """When Ollama IS running, run_pipeline_mode proceeds past the guard."""
@@ -652,19 +671,9 @@ class TestOllamaGuard(unittest.TestCase):
              patch("sys.stdout", new_callable=io.StringIO):
 
             mock_pipeline_cls.return_value = self._make_pipeline_mock()
-
-            result = run_pipeline_mode(
-                workspace_dir="/tmp/test_ollama",
-                config={"search": {"max_results": 25}},
-                criteria_path="/tmp/criteria.yaml",
-                profile_path="/tmp/profile.json",
-                search_jobs="Python",
-                location="Berlin",
-                radius=25,
-            )
+            result = self._call_pipeline()
 
             self.assertIsNone(result)
-            # search() WAS called (guard didn't block)
             mock_pipeline_cls.return_value.search.assert_called_once()
 
     def test_cloud_fallback_allowed_skips_guard(self):
@@ -676,19 +685,9 @@ class TestOllamaGuard(unittest.TestCase):
              patch("sys.stdout", new_callable=io.StringIO):
 
             mock_pipeline_cls.return_value = self._make_pipeline_mock()
-
-            result = run_pipeline_mode(
-                workspace_dir="/tmp/test_ollama",
-                config={"search": {"max_results": 25}},
-                criteria_path="/tmp/criteria.yaml",
-                profile_path="/tmp/profile.json",
-                search_jobs="Python",
-                location="Berlin",
-                radius=25,
-            )
+            result = self._call_pipeline()
 
             self.assertIsNone(result)
-            # search() WAS called — cloud fallback allowed, no block
             mock_pipeline_cls.return_value.search.assert_called_once()
 
     def test_gemini_priority_skips_guard(self):
@@ -700,19 +699,9 @@ class TestOllamaGuard(unittest.TestCase):
              patch("sys.stdout", new_callable=io.StringIO):
 
             mock_pipeline_cls.return_value = self._make_pipeline_mock()
-
-            result = run_pipeline_mode(
-                workspace_dir="/tmp/test_ollama",
-                config={"search": {"max_results": 25}},
-                criteria_path="/tmp/criteria.yaml",
-                profile_path="/tmp/profile.json",
-                search_jobs="Python",
-                location="Berlin",
-                radius=25,
-            )
+            result = self._call_pipeline()
 
             self.assertIsNone(result)
-            # search() WAS called — gemini priority, no block
             mock_pipeline_cls.return_value.search.assert_called_once()
 
 

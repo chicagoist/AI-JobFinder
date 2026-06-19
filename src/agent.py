@@ -1360,6 +1360,46 @@ def save_anschreiben_pdf(anschreiben_text, company_name, candidate_profile, outp
         print(f"{Colors.GREEN}Successfully generated PDF Cover Letter at '{output_path}'{Colors.END}")
     else:
         print(f"{Colors.YELLOW}Warning: Continuing without PDF for this application.{Colors.END}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="JobAgent CLI")
+    parser.add_argument("--pipeline", action="store_true", help="Run the automated application pipeline")
+    parser.add_argument("--parse-cv", action="store_true", help="Parse CV into structured JSON profile")
+    parser.add_argument("--test-score", type=str, help="Score a given job description file")
+    parser.add_argument("--test-anschreiben", nargs=2, help="Generate a cover letter for a given job and test it")
+    parser.add_argument("--search-jobs", type=str, nargs="?", default=None, help="Search jobs (query)")
+    parser.add_argument("--location", type=str, default="Frankfurt am Main", help="Location for job search")
+    parser.add_argument("--radius", type=int, default=25, help="Radius for job search in km")
+    parser.add_argument("--force-generate", action="store_true", help="Force generate documents unconditionally")
+    parser.add_argument("--auto-approve", action="store_true", help="Automatically approve suitable applications")
+    parser.add_argument("--reset-candidate", action="store_true", help="Reset candidate database and workspace files")
+    parser.add_argument("--generate-dummy-cv", action="store_true", help="Generate a basic dummy CV PDF")
+    parser.add_argument("--config", type=str, default="config/config.yaml", help="Path to config file")
+    parser.add_argument("--profile", type=str, default="config/candidate_profile.json", help="Path to candidate profile")
+    parser.add_argument("--criteria", type=str, default="config/job_criteria.yaml", help="Path to job criteria config")
+    parser.add_argument("--debug", action="store_true", help="Enable debugging mode")
+    parser.add_argument("--ignore-ollama", action="store_true", help="Proceed even if Ollama is not running (demo/testing only)")
+
+    args = parser.parse_args()
+
+    workspace_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(workspace_dir, args.config) if not os.path.isabs(args.config) else args.config
+    criteria_path = os.path.join(workspace_dir, args.criteria) if not os.path.isabs(args.criteria) else args.criteria
+    profile_path = os.path.join(workspace_dir, args.profile) if not os.path.isabs(args.profile) else args.profile
+    prompts_path = os.path.join(os.path.dirname(config_path), "prompts.yaml")
+
+    if args.reset_candidate:
+        reset_candidate_data(workspace_dir, config_path, criteria_path, profile_path)
+        return
+
+    config = load_config(config_path)
+    criteria = load_criteria(criteria_path)
+
+    if args.generate_dummy_cv:
+        generate_dummy_cv(os.path.join(workspace_dir, config.get("user_profile", {}).get("cv_path", "Lebenslauf_UserName.pdf")))
+        return
+
     conn = init_db()
     
     # Automatically scan workspace and update file index database on startup
@@ -1384,7 +1424,7 @@ def save_anschreiben_pdf(anschreiben_text, company_name, candidate_profile, outp
     if args.pipeline:
         run_pipeline_mode(workspace_dir, config, criteria_path, profile_path,
                           args.search_jobs, args.location, args.radius, args.force_generate,
-                          args.auto_approve)
+                          args.auto_approve, args.ignore_ollama)
         return
 
     # --- Guard: Local LLM required but Ollama is not running ---
@@ -1393,13 +1433,18 @@ def save_anschreiben_pdf(anschreiben_text, company_name, candidate_profile, outp
         init_gemini()  # Load globals from config
         if PRIORITY_LLM == "local" and not ALLOW_CLOUD_FALLBACK:
             if not ollama_available(LOCAL_MODEL):
-                print(f"\n{Colors.RED}{Colors.BOLD}{'='*60}{Colors.END}")
-                print(f"{Colors.RED}{Colors.BOLD}  ❌ Local LLM required. Start Ollama:{Colors.END}")
-                print(f"{Colors.CYAN}     ollama serve{Colors.END}")
-                print(f"{Colors.GREY}     Or if already installed: ollama run {LOCAL_MODEL}{Colors.END}")
-                print(f"{Colors.GREY}     Model needed: {LOCAL_MODEL}{Colors.END}")
-                print(f"{Colors.RED}{Colors.BOLD}{'='*60}{Colors.END}\n")
-                return
+                if args.ignore_ollama:
+                    print(f"\n{Colors.YELLOW}{Colors.BOLD}⚠ [1mLocal LLM required but Ollama is not running.{Colors.END}")
+                    print(f"{Colors.YELLOW}  Proceeding due to --ignore-ollama flag. Jobs will score 0/10.{Colors.END}")
+                    print(f"{Colors.YELLOW}  Start Ollama for real results: ollama serve{Colors.END}\n")
+                else:
+                    print(f"\n{Colors.RED}{Colors.BOLD}{'='*60}{Colors.END}")
+                    print(f"{Colors.RED}{Colors.BOLD}  ❌ Local LLM required. Start Ollama:{Colors.END}")
+                    print(f"{Colors.CYAN}     ollama serve{Colors.END}")
+                    print(f"{Colors.GREY}     Or if already installed: ollama run {LOCAL_MODEL}{Colors.END}")
+                    print(f"{Colors.GREY}     Model needed: {LOCAL_MODEL}{Colors.END}")
+                    print(f"{Colors.RED}{Colors.BOLD}{'='*60}{Colors.END}\n")
+                    return
 
     if args.parse_cv:
         parse_cv(cv_path, profile_path, criteria_path)
@@ -1467,10 +1512,6 @@ def save_anschreiben_pdf(anschreiben_text, company_name, candidate_profile, outp
         print(anschreiben)
         pdf_path = os.path.join(os.path.dirname(__file__), "output", f"Anschreiben_{company_name}.pdf")
         save_anschreiben_pdf(anschreiben, company_name, profile, pdf_path)
-        
-    elif args.send_email and not args.url and not args.interactive and args.search_jobs is None:
-        # send-email only mode: no Playwright needed
-        pass
         
     else:
         # No CLI arguments — launch config GUI
