@@ -33,7 +33,7 @@ from job_agent.llm import init_gemini
 from job_agent.direct_email_applier import (
     extract_contact_info,
     personalize_anschreiben,
-    send_direct_email,
+    generate_direct_email_draft,
     collect_relevant_attachments,
 )
 from playwright.sync_api import sync_playwright
@@ -254,9 +254,9 @@ def retry_single(db_id: int) -> int:
     if not attachments:
         print(f"{Colors.YELLOW}Warning: No attachments found (no CV PDF indexed?).{Colors.END}")
 
-    # Send email
-    print(f"\n{Colors.BLUE}Sending email to {contact['email']}...{Colors.END}")
-    success = send_direct_email(
+    # GDPR: Generate draft instead of auto-sending
+    print(f"\n{Colors.BLUE}Generating draft for {contact['email']} (GDPR: no auto-send)...{Colors.END}")
+    success = generate_direct_email_draft(
         smtp_config=smtp_config,
         candidate_profile=candidate_profile,
         contact=contact,

@@ -2015,19 +2015,18 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
         pdf_context = None
     save_anschreiben_pdf(anschreiben_data, company_name, candidate_profile, anschreiben_pdf_path, browser_context=pdf_context)
     
-    # Try direct email application if job text contains contact email
-    from job_agent.direct_email_applier import extract_contact_info, collect_relevant_attachments, send_direct_email, personalize_anschreiben
+    # GDPR: Generate email draft (.eml) instead of direct SMTP to recruiter
+    # Candidate must review and send manually
+    from job_agent.direct_email_applier import extract_contact_info, collect_relevant_attachments, generate_direct_email_draft, personalize_anschreiben
     if auto_approve and not no_email:
         
         contact = extract_contact_info(job_text)
         if contact and contact.get("email"):
-            print(f"{Colors.BLUE}Found contact email in job: {contact['email']}{Colors.END}")
+            print(f"{Colors.BLUE}Found contact email in job: {contact['email']} — generating draft (GDPR: no auto-send){Colors.END}")
             if contact.get("recruiter_name"):
                 print(f"{Colors.BLUE}Found recruiter name: {contact['recruiter_name']}. Personalizing Anschreiben...{Colors.END}")
-                # Personalize salutation in full_text and update dict for PDF
                 name = contact["recruiter_name"].strip().split('\n')[0].strip()
                 anschreiben_data["full_text"] = personalize_anschreiben(anschreiben_data.get("full_text", ""), name)
-                # Also update salutation for PDF rendering
                 nl = name.lower()
                 if nl.startswith("herr "):
                     anschreiben_data["salutation"] = f"Sehr geehrter {name[5:]},"
@@ -2043,7 +2042,7 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
             
             anschreiben_full_text = anschreiben_data.get("full_text", "") if isinstance(anschreiben_data, dict) else anschreiben_data
             attachments = collect_relevant_attachments(conn, job_text, anschreiben_pdf_path, workspace_dir)
-            success = send_direct_email(
+            draft_ok = generate_direct_email_draft(
                 config.get("smtp", {}),
                 candidate_profile,
                 contact,
@@ -2051,21 +2050,17 @@ def process_job_url(page, url, candidate_profile, config, criteria, conn, auto_a
                 attachments,
                 job_title,
                 company_name,
-                url=url
+                url=url,
+                terminal_output=tee.getvalue() if tee else None
             )
-            if success:
-                log_application(conn, company_name, job_title, url, total_score, "Applied (Direct Email)",
+            if draft_ok:
+                log_application(conn, company_name, job_title, url, total_score, "Draft Generated",
                               terminal_output=tee.getvalue() if tee else "", pdf_path=anschreiben_pdf_path)
-                # Mark email_sent=1 since direct email was already delivered
-                db_cursor = conn.cursor()
-                db_cursor.execute("UPDATE applied_jobs SET email_sent = 1 WHERE url = ?", (url,))
-                conn.commit()
-                print(f"{Colors.GREEN}Direct email sent to {contact['email']} for {job_title} at {company_name}!{Colors.END}")
-                print(f"{Colors.GREEN}Direct email application logged as 'Applied (Direct Email)'.{Colors.END}")
+                print(f"{Colors.GREEN}Email draft generated for {contact['email']} — open .eml manually to send.{Colors.END}")
             else:
-                log_application(conn, company_name, job_title, url, total_score, "Applied (Direct Email Failed)",
+                log_application(conn, company_name, job_title, url, total_score, "Draft Failed",
                               terminal_output=tee.getvalue() if tee else "", pdf_path=anschreiben_pdf_path)
-                print(f"{Colors.YELLOW}Direct email sending failed, but logged as 'Applied (Direct Email Failed)'.{Colors.END}")
+                print(f"{Colors.YELLOW}Draft generation failed.{Colors.END}")
             print(f"\n{Colors.GREY}{'='*80}{Colors.END}\n")
             return
     
