@@ -121,7 +121,7 @@ SAMPLE_CONFIG = {
     },
     "criteria": {"german_level": "B1"},
     "smtp": {"username": "max@example.com"},
-    "llm": {"priority": "local", "local_model": "qwen2.5:7b"},
+    "llm": {"priority": "local", "local_model": "llama3.2:3b"},
     "user_profile": {"cv_path": "Lebenslauf.pdf", "chrome_data_dir": "/tmp"},
 }
 

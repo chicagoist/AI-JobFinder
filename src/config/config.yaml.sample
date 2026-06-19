@@ -42,8 +42,8 @@ llm:
   # "gemini" — tries Google Gemini first, OpenRouter fallback.
   priority: "local"
   # Local model name (for priority: "local"). Install with: bash scripts/setup_local_llm.sh
-  # Recommended: qwen2.5:7b (~4.4GB), llama3.1:8b, mistral:7b
-  local_model: "qwen2.5:7b"
+  # Recommended: llama3.2:3b (~2.0GB), qwen2.5:3b (~1.9GB). 7B+ models need 8GB+ RAM.
+  local_model: "llama3.2:3b"
 
 openrouter:
   api_key: "<YOUR_OPENROUTER_API_KEY>"   # sk-or-v1-... — also read from env OPENROUTER_API_KEY

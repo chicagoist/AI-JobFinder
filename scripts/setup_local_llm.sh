@@ -66,7 +66,7 @@ for i in $(seq 1 30); do
 done
 
 # 4. Pull default model
-MODEL=${1:-qwen2.5:7b}
+MODEL=${1:-llama3.2:3b}
 echo "📥 Pulling model: $MODEL (~4.4GB)"
 echo "   This may take a while depending on your internet connection..."
 ollama pull "$MODEL"

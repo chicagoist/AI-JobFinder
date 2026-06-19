@@ -2,7 +2,7 @@
 
 Requires Ollama installed and running (http://localhost:11434).
 Install: curl -fsSL https://ollama.com/install.sh | sh
-Pull model: ollama pull qwen2.5:7b
+Pull model: ollama pull llama3.2:3b
 Start: ollama serve
 """
 
@@ -11,7 +11,7 @@ from typing import Optional
 from job_agent.utils import Colors
 
 OLLAMA_BASE_URL = "http://localhost:11434"
-DEFAULT_MODEL = "qwen2.5:7b"  # ~4.4GB, runs on 8GB RAM
+DEFAULT_MODEL = "llama3.2:3b"  # ~2GB, fits in 9GB RAM
 TIMEOUT_SECONDS = 180
 
 
@@ -79,7 +79,7 @@ def ollama_available(model: str = DEFAULT_MODEL) -> bool:
         # Check for exact match or with :latest suffix
         if model in available_names or f"{model}:latest" in available_names:
             return True
-        # Also accept partial matches (e.g. "qwen2.5" matches "qwen2.5:7b")
+        # Also accept partial matches (e.g. "llama3.2" matches "llama3.2:3b")
         model_short = model.split(":")[0]
         for name in available_names:
             if name.startswith(model_short):
