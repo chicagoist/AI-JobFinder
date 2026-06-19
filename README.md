@@ -1,5 +1,7 @@
 # AI-JobFinder
 
+**🚨 RECHTLICHER HINWEIS — Dieses Tool interagiert automatisiert mit Webseiten Dritter, was gegen deren AGB oder geltende Datenschutzgesetze (u.a. DSGVO, TTDSG) verstoßen kann. Die Nutzung erfolgt ausschließlich zu Test- und Lernzwecken. Nicht für reale Bewerbungen verwenden. Geplant sind eine Umstellung auf offizielle APIs sowie die Nutzung lokaler LLMs, um Rechtskonformität zu gewährleisten.**
+
 **⚠️ BETA — This project is in early beta. Features, configuration, and data formats may change without notice. Use at your own risk.**
 
 **⚠️ LEGAL COMPLIANCE NOTICE — This project is designed to operate FULLY LOCALLY to comply with EU/German data protection law (GDPR, BDSG, EU AI Act).** See `LEGAL_COMPLIANCE_PLAN.md` for the complete compliance strategy.
