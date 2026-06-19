@@ -1393,6 +1393,16 @@ def main():
         reset_candidate_data(workspace_dir, config_path, criteria_path, profile_path)
         return
 
+    # Ensure active configs exist (restore from .sample templates if missing)
+    restore_active_configs_from_samples(workspace_dir, config_path, criteria_path, profile_path, prompts_path)
+    PROMPTS = load_prompts(prompts_path)
+
+    # Launch GUI if no CLI mode specified (before loading configs)
+    if not any([args.pipeline, args.parse_cv, args.reset_candidate,
+                args.generate_dummy_cv, args.test_score, args.test_anschreiben]):
+        run_config_gui(config_path, criteria_path, profile_path, prompts_path)
+        return
+
     config = load_config(config_path)
     criteria = load_criteria(criteria_path)
 

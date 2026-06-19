@@ -335,7 +335,7 @@ cover_letter:
 
 def load_config(config_path=None):
     if config_path is None:
-        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.yaml")
+        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "config.yaml")
     if not os.path.exists(config_path):
         print(f"Error: Configuration file {config_path} not found.")
         sys.exit(1)
@@ -344,7 +344,7 @@ def load_config(config_path=None):
 
 def load_criteria(criteria_path=None):
     if criteria_path is None:
-        criteria_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "job_criteria.yaml")
+        criteria_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "job_criteria.yaml")
     if not os.path.exists(criteria_path):
         print(f"Error: Criteria file {criteria_path} not found.")
         sys.exit(1)
@@ -353,7 +353,7 @@ def load_criteria(criteria_path=None):
 
 def load_prompts(prompts_path=None):
     if prompts_path is None:
-        prompts_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "prompts.yaml")
+        prompts_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "prompts.yaml")
     sample_path = prompts_path + ".sample"
     if not os.path.exists(prompts_path):
         if os.path.exists(sample_path):
