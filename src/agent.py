@@ -1395,7 +1395,7 @@ def main():
 
     # Ensure active configs exist (restore from .sample templates if missing)
     restore_active_configs_from_samples(workspace_dir, config_path, criteria_path, profile_path, prompts_path)
-    PROMPTS = load_prompts(prompts_path)
+    # PROMPTS is already loaded at module level — do NOT shadow with local var
 
     # Launch GUI if no CLI mode specified (before loading configs)
     if not any([args.pipeline, args.parse_cv, args.reset_candidate,
