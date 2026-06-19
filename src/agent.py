@@ -11,7 +11,8 @@ import job_agent.utils
 from job_agent.utils import Colors, clean_and_repair_json, TeeStdout
 from job_agent.config import load_config, load_criteria, load_prompts, restore_active_configs_from_samples, DEFAULT_PROMPTS, PROMPTS
 from job_agent.db import init_db, log_application, get_past_rejections
-from job_agent.llm import init_gemini, llm_request_with_fallback
+from job_agent.llm import init_gemini, llm_request_with_fallback, PRIORITY_LLM, ALLOW_CLOUD_FALLBACK, LOCAL_MODEL
+from job_agent.ollama_llm import ollama_available
 from job_agent.pipeline import run_pipeline_mode
 # sync_playwright imported locally where needed (PDF rendering)
 
@@ -1385,6 +1386,20 @@ def save_anschreiben_pdf(anschreiben_text, company_name, candidate_profile, outp
                           args.search_jobs, args.location, args.radius, args.force_generate,
                           args.auto_approve)
         return
+
+    # --- Guard: Local LLM required but Ollama is not running ---
+    # Covers --parse-cv, --test-score, --test-anschreiben (all call LLM)
+    if args.parse_cv or args.test_score or args.test_anschreiben:
+        init_gemini()  # Load globals from config
+        if PRIORITY_LLM == "local" and not ALLOW_CLOUD_FALLBACK:
+            if not ollama_available(LOCAL_MODEL):
+                print(f"\n{Colors.RED}{Colors.BOLD}{'='*60}{Colors.END}")
+                print(f"{Colors.RED}{Colors.BOLD}  ❌ Local LLM required. Start Ollama:{Colors.END}")
+                print(f"{Colors.CYAN}     ollama serve{Colors.END}")
+                print(f"{Colors.GREY}     Or if already installed: ollama run {LOCAL_MODEL}{Colors.END}")
+                print(f"{Colors.GREY}     Model needed: {LOCAL_MODEL}{Colors.END}")
+                print(f"{Colors.RED}{Colors.BOLD}{'='*60}{Colors.END}\n")
+                return
 
     if args.parse_cv:
         parse_cv(cv_path, profile_path, criteria_path)
