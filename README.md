@@ -70,98 +70,121 @@ This project is designed to AVOID the following legal violations:
 
 ## How It Works
 
-The agent processes job vacancies through a deterministic pipeline:
+AI-JobFinder operates in **two modes** — Legacy (web scraping + SMTP) and Pipeline (GDPR-compliant). This document describes the **Pipeline mode**, which is the recommended path.
 
-**1. Job URL acquisition** — URLs come from official job API search (`--search-jobs`) or a direct URL (`--url`). Search uses Bundesagentur für Arbeit + Arbeitnow APIs. **No web scraping.**
+### Pipeline Mode — 6 Stages
 
-**2. Duplicate check** — Every URL is checked against the SQLite database (`output/applications.db`, table `applied_jobs`). If the URL already exists (regardless of status), the vacancy is skipped immediately. This guarantees idempotency across multiple runs.
+The `JobPipeline` orchestrator in `src/job_agent/pipeline.py` processes each job through 6 clean stages:
 
-**3. Playwright page load** — The job page is opened in a Chrome browser controlled by Playwright. The agent waits for `domcontentloaded` + 2 seconds, then extracts the page title and full body text. Dead links are detected early (404 pages, expired Indeed job search pages) to avoid wasting LLM quota.
+**Stage 0 — Initialization**
+- Load `config.yaml` (API keys, SMTP, Chrome path)
+- Load `job_criteria.yaml` (KO filters, min score, industry rules)
+- Load `candidate_profile.json` (CV data: skills, experience, education)
+- Load `prompts.yaml` (LLM prompt templates)
+- `init_db()` → SQLite `output/applications.db` (3 tables)
+- `init_gemini()` + `ollama_available()` → LLM client cascade ready
+- `index_candidate_files()` → scan `documents/*.pdf` into DB
 
-**4. Rule-based extraction** — Company name and job title are extracted from the page title using URL-specific heuristics (LinkedIn: `title | Company | LinkedIn`; Indeed: `title - company - Indeed`; StepStone: `title - Company`). If rules fail, Gemini extracts the data.
+**Stage 1 — Job Search (Official APIs, NO web scraping)**
+- `search_all_sources(query, location, radius)` from `job_sources/`
+- **Bundesagentur für Arbeit** — API v6: `POST https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v6/jobs` with public `X-API-Key: jobboerse-jobsuche` header. Returns JSON with `ergebnisliste`.
+- **Arbeitnow** — free API: `GET https://www.arbeitnow.com/api/job-board/api`. No authentication.
+- Deduplication by URL, sorted, limited to `max_results` (~25)
+- Returns `list[JobPosting]` dataclass (url, title, company, description, salary, location, source)
 
-**5. KO filter check** — The job text is checked against hard filters from `job_criteria.yaml`:
+**Stage 2 — Intake Check (LLM validation)**
+- `pipeline.job_intake(job)` → LLM prompt: `job_intake_prompt`
+- Validates: is_valid_job (not spam/test), company_name, job_title, industry (IT/Handwerk/Chemie/Finanzen/...)
+- Detects: forbidden titles (Senior/Junior mismatch via word boundary), duplicate in DB (URL + company+title match)
+- KO triggers: company blacklist, clearance keywords, certifications, language requirements, salary threshold, spam providers, datacenter/physical work
+- Fallback: `_default_intake()` allows the job through if LLM fails
 
-- **Forbidden titles**: Senior, Middle, Consultant, Helpdesk, Full Stack — blocked immediately.
-- **Company blacklist**: Specific companies (e.g. Zukunftsmotor) are blocked.
-- **Language requirements**: German below B1 or English below A2 triggers a KO.
-- **Education**: Roles requiring a specific degree without IT relevance are blocked; `block_degree_only_roles` and `require_it_degree_strictly` flags control strictness.
-- **Certifications**: If RHCSA/RHCE/CCNA are listed as mandatory and missing in the profile, KO.
-- **Security clearances**: U.S. citizenship, Secret/Top Secret clearance keywords → KO.
-- **Spam providers**: GFN, WBS, DAA, IU keywords → KO (internships still allowed via `allow_internship`).
-- **Salary**: `min_annual_eur` threshold checked against any salary mentioned.
-- **Datacenter/physical work**: If the role requires on-site datacenter work and it is forbidden → KO.
-- **User rejection reasons**: Past user rejections (saved in `user_rejections` table) are merged into the KO list and passed to the scoring prompt, which gives 0/10 if the reason matches.
+**Stage 3 — Scoring (LLM match evaluation)**
+- `pipeline.score_job(job, intake)` → LLM prompt: `scoring_prompt_{industry}`
+- Returns: `total_score` (0.0–10.0), `ko_criterion_triggered`, `reasoning` (German text)
+- Factors: industry-specific KO rules, mandatory skills, career_start_year, salary, language levels, clearance, past rejection reasons
+- Threshold: `min_score_to_apply` from `job_criteria.yaml` → `industries.{industry}.scoring` (default 8.0)
+- Below threshold → skip. KO triggered → skip.
 
-Any KO causes `score = 0` and the vacancy is logged as skipped.
+**Stage 4 — Cover Letter (LLM generation)**
+- `pipeline.generate_anschreiben(job, intake, score_data)` → LLM prompt: `cover_letter_prompt_{industry}`
+- Returns: `subject`, `salutation` (with name if known), `body` (3–5 paragraphs, DIN 5008), `closing`, `full_text`
+- Context: CV text from `documents/*.pdf`, industry-specific mandatory skills, salary expectation, availability
+- Fallback: `_empty_anschreiben()` returns a minimal template if LLM fails
 
-**6. LLM scoring** — The job text and candidate profile are sent to Gemini (or OpenRouter fallback) with a scoring prompt. The LLM returns a score from 0.0 to 10.0, the reasoning text, and a match assessment.
+**Stage 5 — PDF Rendering (DIN 5008 via Playwright)**
+- `pipeline.save_pdf(anschreiben_data, company_name)`
+- HTML → Chromium headless → `page.pdf()`
+- Format: A4, 25mm/20mm margins, sender block (right-aligned), recipient, date, subject, salutation, body, closing
+- Saved: `src/output/Anschreiben_{CompanyName}.pdf`
 
-If `score < min_score_to_apply` (default 5.0), the vacancy is logged as `Skipped (Low Score)` and skipped.
+**Stage 6 — Email Draft (.eml, NO SMTP — GDPR compliant)**
+- `pipeline.create_draft(job, anschreiben, pdf_path)`
+- `extract_contact_info(job.description)` → finds recruiter email if present in job text
+- `personalize_anschreiben()` → inserts recruiter name into salutation if known
+- `_collect_candidate_docs()` → collects CV + certificates from DB as attachments
+- `generate_email_draft()` → writes `.eml` file to `drafts/` directory
+- CC copy also generated for the candidate (if candidate email is configured)
+- ⚠️ **Drafts must be opened manually** in a mail client (Thunderbird, Outlook) — no automatic sending
 
-**7. Cover letter generation** — For vacancies scoring >= threshold, Gemini generates a personalised Anschreiben. The letter is rendered to a PDF file via ReportLab and saved to `output/Anschreiben_{CompanyName}.pdf`.
+**Final — Logging + Batch Digest**
+- `log_application()` → SQLite `applied_jobs` (status, score, pdf_path)
+- `generate_pending_digest()` → `drafts/digest_{date}.eml` with all pending applications
+- Summary printed: Approved / Skipped / Total
 
-**8. Direct email** — The job description is scanned for a contact email (regex) and optionally a recruiter name (regex + Gemini `extract_recruiter_prompt`). If found:
+### LLM Cascade (Priority)
 
-- The Anschreiben is personalised with the recruiter's name.
-- Relevant attachments are collected: the newest Lebenslauf (from `candidate_files` table), the generated Anschreiben PDF, and any Zertifikat/Diplom whose content keyword-overlaps with the job description.
-- A single SMTP session is opened: the primary email is sent to the recruiter, then a CC copy (`[KOPIE]` prefix) is sent to the candidate in the same connection.
-- On `SMTPServerDisconnected`, the agent reconnects and retries up to 3 times.
-- On success → `Applied (Direct Email)`, `email_sent = 1`.
-- On failure → `Applied (Direct Email Failed)`.
+```
+llm_request_with_fallback(prompt)
+  │
+  ├── 1. LOCAL (Ollama)
+  │   ├── ollama_available("llama3.2:3b")?
+  │   ├── YES → call_ollama(prompt, model)
+  │   │   POST http://localhost:11434/api/generate
+  │   └── NO / Error → fallback to OpenRouter
+  │
+  ├── 2. OPENROUTER (free tier)
+  │   ├── call_openrouter(prompt)
+  │   └── Error → fallback to Gemini
+  │
+  └── 3. GEMINI (Google Cloud — last resort)
+      ├── Key rotation (up to 5 API keys)
+      ├── Models: gemini-2.5-flash → 3.1-flash-lite → 2.5-flash-lite → flash-latest
+      └── All exhausted → user prompt for new key or wait
+```
 
-**9. Form filler** — If no contact email is found, Playwright attempts to fill the job application web form:
+### GDPR Compliance Map
 
-- Fields are matched by name/label/placeholder keywords (`name`, `vorname`, `nachname`, `email`, `telefon`, `strasse`, `plz`, `stadt`, `linkedin`, `github`, `gehaltsvorstellung`, `verfügbarkeit`, `kündigungsfrist`, `arbeitserlaubnis`, `nachricht`, `anschreiben`, `lebenslauf`, `upload`, `file`, `bewerbung`).
-- File uploads are handled via `set_input_files`.
-- Text inputs use `fill()` and `select_option()` for dropdowns.
-- If the page is LinkedIn and the form filler produced 0 actions, `try_linkedin_easy_apply()` is triggered (clicks the "Easy Apply" button and steps through modal dialogs).
-
-**10. Fallback email** — If the form filler produced 0 actions AND no recruiter email was found, the agent sends the generated Anschreiben + attachments to the candidate's own email address (from `candidate_profile.json`) as a fallback. This ensures the candidate never loses an application even when automation fails.
-
-- Success → `Applied (Email)`, `email_sent = 1`.
-- Failure → `Applied (Email Failed)` (retried later by `--send-email`).
-
-**11. Human-in-the-loop (or auto-approve)** — For form-filled applications, the agent prints the score + reasoning and waits for user input unless `--auto-approve` is active:
-
-- `enter` → application is logged as `Applied`.
-- `cancel` → user is prompted for a reason, which is saved to `user_rejections` table AND appended to `ko_filters.user_rejected_reasons` in `job_criteria.yaml`. This creates a feedback loop — future runs will pass this reason to the scoring prompt, causing matching vacancies to score 0/10.
-- `s` → skip to next vacancy.
-
-**12. Batch email sending** — At the end of the run (or via `--send-email` standalone), `send_pending_emails()` queries the database for all records with `email_sent = 0`. For each:
-
-- A ZIP archive is built containing `job_info.txt` (company, title, URL, date, score), `terminal_output.txt` (cleaned log), and the Anschreiben PDF.
-- A single SMTP session connects and sends all pending ZIP packages to the candidate's email.
-- On `SMTPServerDisconnected`, the remaining packages are skipped (logged, to be retried next run).
-- `email_sent = 1` is set on success.
+| Legal Risk | Mitigation | Status |
+|-----------|-----------|--------|
+| Web scraping ToS violations | Official APIs (Bundesagentur + Arbeitnow) | ✅ |
+| Automated profiling (GDPR Art. 22) | Human-in-the-loop: user reviews all scores | ✅ |
+| PII transfer to US (Schrems II) | Default LLM is local (Ollama), cloud is opt-in fallback | ✅ |
+| Unauthorized recruiter outreach | `.eml` drafts only — manual sending required | ✅ |
+| Bulk data extraction (UrhG) | API-based access respects copyright | ✅ |
+| High-risk AI in hiring (EU AI Act) | All decisions reviewed by user; scoring is a recommendation | ✅ |
 
 ---
 
 ## Pipeline Diagram
 
-The diagram below shows the current architecture for job portals **LinkedIn** and **Indeed**. As the project evolves and new platforms (StepStone, Xing, Monster, Glassdoor) are added, this pipeline may change or be extended.
+The diagram below shows the **GDPR-compliant Pipeline mode**. Legacy mode (web scraping + SMTP) is available via `agent.py` without `--pipeline` but is not recommended.
 
 ```mermaid
 flowchart TD
-    START["🎯 JOB URL / SEARCH"] --> CHECK{is_already_applied?<br/>SQLite lookup}
-    CHECK -- "YES<br/>(duplicate)" --> SKIP1["⏭️ SKIP"]
-    CHECK -- "NO" --> LOAD["🌐 Playwright load<br/>+ dead-link detection"]
-    LOAD --> KO{KO filter check<br/>10 filter types}
-    KO -- "KO hit" --> SKIP2["⏭️ SKIP"]
-    KO -- "OK" --> LLM["🤖 LLM scoring<br/>0–10"]
-    LLM --> SCORE{Score ≥ 5.0?}
-    SCORE -- "No<br/>&lt; 5.0" --> SKIP3["⏭️ SKIP"]
-    SCORE -- "Yes<br/>≥ 5.0" --> ANSCHREIBEN["📄 Anschreiben PDF<br/>Gemini + PDF"]
-    ANSCHREIBEN --> EMAIL{Email found?}
-    EMAIL -- "Yes" --> DIRECT["📧 send_direct_email()<br/>1 session: recruiter + CC"]
-    DIRECT --> DIR_OK["✅ Applied<br/>(Direct Email)"]
-    DIRECT --> DIR_FAIL["❌ Applied<br/>(Direct Email Failed)"]
-    EMAIL -- "No" --> FILLER["📝 Form filler<br/>(Playwright)"]
-    FILLER --> FILLED{Form filled?}
-    FILLED -- "Yes" --> APP["✅ APPLIED"]
-    FILLED -- "No (0 actions)" --> FALLBACK["📧 Fallback email<br/>to candidate"]
-    FALLBACK --> FB_OK["✅ Applied<br/>(Email)"]
-    FALLBACK --> FB_FAIL["❌ Applied<br/>(Email Failed)"]
+    INIT["⚙️ INIT: Config + DB + LLM + Docs"]
+    INIT --> SEARCH["🔍 STAGE 1: Search<br/>Bundesagentur API + Arbeitnow API<br/>NO web scraping"]
+    SEARCH --> INTAKE["📋 STAGE 2: Intake Check<br/>LLM validation + KO filters"]
+    INTAKE --> INT_KO{Valid?}
+    INT_KO -- "KO / Duplicate" --> SKIP1["⏭️ SKIP"]
+    INT_KO -- "OK" --> SCORE["📊 STAGE 3: Scoring<br/>LLM score 0–10 + reasoning"]
+    SCORE --> SC_OK{Score ≥ threshold?}
+    SC_OK -- "No" --> SKIP2["⏭️ SKIP (Low Score)"]
+    SC_OK -- "Yes" --> ANSCH["✍️ STAGE 4: Cover Letter<br/>LLM generates Anschreiben"]
+    ANSCH --> PDF["📄 STAGE 5: PDF<br/>DIN 5008 via Playwright"]
+    PDF --> DRAFT["📧 STAGE 6: Email Draft<br/>.eml file in drafts/<br/>NO automatic SMTP"]
+    DRAFT --> LOG["💾 Log to SQLite + Batch Digest"]
+    LOG --> DONE["✅ DONE<br/>User sends .eml manually"]
 ```
 
 ## Requirements
