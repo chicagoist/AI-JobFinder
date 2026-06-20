@@ -2,7 +2,9 @@
 
 Provides a unified interface for searching job vacancies from official sources:
 - Bundesagentur für Arbeit (official German job board, no auth needed)
-- Arbeitnow (aggregates from ATS systems, free API key not needed)
+- Arbeitnow (aggregates from ATS systems, no auth needed)
+- Jooble (aggregator API, requires JOOBLE_API_KEY env var)
+- Adzuna (global job search API, requires ADZUNA_APP_ID + ADZUNA_APP_KEY env vars)
 
 Usage:
     from job_agent.job_sources import search_all_sources
@@ -51,15 +53,19 @@ def search_all_sources(
         List of JobPosting objects, sorted by source priority, limited to max_results.
     """
     if sources is None:
-        sources = ["bundesagentur", "arbeitnow"]
+        sources = ["bundesagentur", "arbeitnow", "jooble", "adzuna"]
 
     # Import all source functions once
     from job_agent.job_sources.bundesagentur import search_bundesagentur
     from job_agent.job_sources.arbeitnow import search_arbeitnow
+    from job_agent.job_sources.jooble import search_jooble
+    from job_agent.job_sources.adzuna import search_adzuna
 
     source_map = {
         "bundesagentur": lambda: search_bundesagentur(query, location, radius),
         "arbeitnow": lambda: search_arbeitnow(query, location),
+        "jooble": lambda: search_jooble(query, location, radius, max_results),
+        "adzuna": lambda: search_adzuna(query, location, radius, max_results),
     }
 
     all_jobs: list[JobPosting] = []

@@ -1139,7 +1139,7 @@ def run_pipeline_mode(
     print(f"\n{Colors.MAGENTA}{Colors.BOLD}{'='*80}{Colors.END}")
     print(f"{Colors.MAGENTA}{Colors.BOLD}  GDPR-Compliant Pipeline Mode{Colors.END}")
     print(f"{Colors.MAGENTA}{Colors.BOLD}{'='*80}{Colors.END}")
-    print(f"  {Colors.GREY}Sources:{Colors.END} Bundesagentur für Arbeit API + Arbeitnow API")
+    print(f"  {Colors.GREY}Sources:{Colors.END} Bundesagentur + Arbeitnow + Jooble + Adzuna")
     print(f"  {Colors.GREY}LLM:{Colors.END} Local (Ollama) → OpenRouter → Gemini fallback")
     print(f"  {Colors.GREY}Output:{Colors.END} .eml drafts in drafts/ (no automatic SMTP)")
     print(f"{Colors.MAGENTA}{Colors.BOLD}{'='*80}{Colors.END}\n")

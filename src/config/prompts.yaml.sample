@@ -72,6 +72,24 @@ cover_letter_prompt: "Erstelle ein professionelles Anschreiben auf Deutsch basie
   \ kein ```json):\n{{\n  \"subject\": \"Bewerbung als Cloud Engineer\",\n  \"salutation\": \"Sehr geehrte Damen und Herren,\"\
   ,\n  \"body\": \"Der vollständige Haupttext des Anschreibens (ohne Betreff, ohne Anrede, ohne Grußformel).\n\nMehrere Absätze\
   \ durch Leerzeile getrennt.\",\n  \"closing\": \"Mit freundlichen Grüßen\"\n}}"
+cover_letter_prompt_Bildung/Lehre: "Erstelle ein professionelles Anschreiben auf Deutsch für eine Bewerbung im Bildungssektor.\
+  \ Das Anschreiben richtet sich an eine Schule, Bildungseinrichtung oder Weiterbildungsorganisation.\n\nKandidatenprofil:\n\
+  {candidate_profile}\n\nStellenbeschreibung:\n{job_description}\n\nZusätzliche Vorgaben:\n- Gehaltsvorstellung: {salary_exp}\
+  \ € brutto pro Jahr.\n- Verfügbarkeit / Eintrittstermin: {availability}.\n- Sprachniveau Deutsch: {candidate_german}.\n\
+  - Pflichtkompetenzen für Bildung/Lehre: {mandatory_skills}.\n\nBerufserfahrung: Der Kandidat unterrichtet seit {career_start_year}\
+  \ (22+ Jahre) die Fächer Chemie, Mathematik und Informatik auf verschiedenen Schulformen (Berufsschule, Realschule, Gymnasium,\
+  \ Erwachsenenbildung).\n\nFormat (DIN 5008):\n1. Betreffzeile (fett): \"Bewerbung als [Position]\" — mit konkreter Position\
+  \ aus der Stellenbeschreibung, z.B. \"Bewerbung als Lehrkraft für Chemie und Mathematik\".\n2. Anrede: \"Sehr geehrte Damen\
+  \ und Herren,\" oder \"Sehr geehrte/r [Ansprechpartner/in],\" falls ein Name bekannt ist.\n3. Brieftext (body):\n   - Einleitung:\
+  \ Bezug auf die ausgeschriebene Stelle, z.B. \"mit großem Interesse habe ich Ihre Stellenausschreibung [...] gelesen.\"\n\
+  \   - Motivation: Warum Bildung/Lehre? Pädagogische Leidenschaft, Freude an der Wissensvermittlung.\n   - Unterrichtserfahrung:\
+  \ Konkrete Fächer (Chemie, Mathematik, Informatik), Schulformen, Zielgruppen, Methodenvielfalt.\n   - Didaktische Kompetenzen:\
+  \ Hervorhebung der Pflichtkompetenzen aus {mandatory_skills}.\n   - Gehaltsvorstellung: {salary_exp} € brutto pro Jahr.\n\
+  \   - Verfügbarkeit: {availability}.\n4. Grußformel (closing): \"Mit freundlichen Grüßen\".\n\nAntworte NUR mit folgendem\
+  \ JSON-Objekt (kein Markdown, kein ```json):\n{{\n  \"subject\": \"Bewerbung als Lehrkraft für Chemie und Mathematik\",\n\
+  \  \"salutation\": \"Sehr geehrte Damen und Herren,\",\n  \"body\": \"Der vollständige Haupttext des Anschreibens (ohne\
+  \ Betreff, ohne Anrede, ohne Grußformel).\n\nMehrere Absätze durch Leerzeile getrennt. Fachspezifische Formulierungen und\
+  \ pädagogische Fachbegriffe verwenden.\",\n  \"closing\": \"Mit freundlichen Grüßen\"\n}}"
 form_filler_prompt: "Du bist ein Assistent, der ein Webformular für eine Bewerbung ausfüllt. Analysiere die Liste der interaktiven\
   \ Elemente (Inputs, Buttons, Uploads) und entscheide für jedes Element, welche Aktion auszuführen ist.\nKandidatenprofil:\n\
   {candidate_profile}\n\nZusätzliche Angaben:\n- Gehaltsvorstellung: {salary_expectation}\n- Frühestmöglicher Eintrittstermin:\
