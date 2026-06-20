@@ -1,76 +1,105 @@
-classification_prompt: 'Klassifiziere das folgende Dokument (die ersten 1000 Zeichen Text) in eine der folgenden Kategorien:
+scoring_prompt_Bildung/Lehre: "Du bist ein erfahrener Personalreferent für den Bildungssektor in Deutschland. Vergleiche das\
+  \ Kandidatenprofil mit der Stellenbeschreibung (Job Description).\n\nKandidatenprofil (JSON):\n{candidate_profile}\n\nBewerte\
+  \ das Match auf einer Skala von 0 bis 10.\n\nEin Score von 10 bedeutet perfekte Übereinstimmung. Ein Score von 0 bedeutet,\
+  \ dass K.O.-Kriterien greifen oder die Rolle absolut unpassend ist.\n\nDu MUSST die folgenden Regeln strikt anwenden:\n\
+  1. Mindestgehalt: Wenn das in der Anzeige erwähnte Jahresgehalt unter {min_salary} € liegt, setze den Score auf 0 und ko_criterion_triggered\
+  \ auf true.\n2. Sprachen:\n   - Der Kandidat besitzt Deutschkenntnisse auf dem Niveau {candidate_german}. Wenn die Stelle\
+  \ Deutsch C2 oder \"verhandlungssicher\" voraussetzt (besonders für Deutsch-/DaZ-Lehrkräfte), prüfe kritisch, ob eine Ausweichklausel\
+  \ (\"oder vergleichbare Kenntnisse\") existiert. Für MINT-Fächer (Chemie, Mathe, Informatik) ist B1 mit Fachvokabular oft\
+  \ ausreichend.\n   - Der Kandidat besitzt Englischkenntnisse auf dem Niveau {candidate_english}. Englisch wird nur für internationale\
+  \ Schulen oder spezielle Programme benötigt.\n3. K.O.-Kriterien / Ausschlüsse:\n   - U.S. Staatsbürgerschaft (U.S. citizenship),\
+  \ Sicherheitsfreigabe (Secret/Top Secret clearance) oder TESA-Status: Wenn eines davon erforderlich ist (z.B. {clearance_keywords}),\
+  \ setze den Score auf 0 und ko_criterion_triggered auf true.\n   - Pflichtzertifikate: Wenn die Stelle Zertifizierungen\
+  \ ({certifications}) zwingend voraussetzt und der Kandidat diese nicht hat, setze den Score auf 0.\n   - Bildungsanbieter:\
+  \ Wenn es sich bei dem Angebot um eine reine Umschulung, Ausbildung oder Weiterbildung mit Förderung durch {spam_keywords}\
+  \ handelt (statt einer Festanstellung), setze den Score auf 0 und ko_criterion_triggered auf true.\n4. Unterrichtsfächer:\n\
+  \   - Der Kandidat unterrichtet Chemie, Mathematik und Informatik (mit 22+ Jahren Erfahrung).\n   - Wenn die Stelle überwiegend\
+  \ andere Fachrichtungen verlangt (z.B. nur Biologie, nur Physik, nur Sprachen), bewerte niedriger.\n   - Fächerübergreifender\
+  \ Unterricht oder MINT-Schwerpunkt wird positiv bewertet.\n5. Schulform / Zielgruppe:\n   - Berufsschule (gelernte Fachrichtung:\
+  \ Chemie, Informatik, Finanzen) ist ideal.\n   - Realschule / Gymnasium / Gesamtschule: gut geeignet.\n   - Grundschule:\
+  \ Weniger passend — niedrigere Punktzahl.\n   - Erwachsenenbildung / Volkshochschule: Sehr gut geeignet (der Kandidat hat\
+  \ langjährige Erfahrung mit erwachsenen Lernenden).\n6. Berufserfahrung (seit {career_start_year}):\n   - Der Kandidat hat\
+  \ 22+ Jahre Unterrichtserfahrung.\n   - Senior-/Erfahrene-Lehrkräfte-Rollen werden positiv bewertet.\n   - Quereinsteiger-Programme\
+  \ sind akzeptabel, aber volle Lehrbefähigung ist vorzuziehen.\n7. Region:\n   - Hanau, Frankfurt am Main, Offenbach, Rhein-Main-Gebiet\
+  \ (Umkreis bis 50 km) werden positiv bewertet.\n   - Andere Regionen: Niedrigere Punktzahl, aber kein automatisches K.O.\n\
+  \n{rejections_str}\n\nPflichtkompetenzen für diese Branche (in der Bewertung gewichten): {mandatory_skills}\n\nStellenbeschreibung:\n\
+  {job_description}\n\nGib das Ergebnis ausschließlich als valides JSON-Objekt im folgenden Format zurück (ohne Markdown-Formatierung\
+  \ wie ```json):\n{{\n  \"total_score\": 7.5,\n  \"ko_criterion_triggered\": false,\n  \"reasoning\": \"Detaillierte Begründung\
+  \ auf Deutsch, warum dieser Score vergeben wurde...\"\n}}"
+scoring_prompt_IT: "Du bist ein erfahrener IT-Recruiter in Deutschland. Vergleiche das Kandidatenprofil mit der Stellenbeschreibung\
+  \ (Job Description).\n\nKandidatenprofil (JSON):\n{candidate_profile}\n\nBewerte das Match auf einer Skala von 0 bis 10.\n\
+  \nEin Score von 10 bedeutet perfekte Übereinstimmung. Ein Score von 0 bedeutet, dass K.O.-Kriterien greifen oder die Rolle\
+  \ absolut unpassend ist.\n\nDu MUSST die folgenden Regeln strikt anwenden:\n1. Mindestgehalt: Wenn das in der Anzeige erwähnte\
+  \ Jahresgehalt unter {min_salary} € liegt, setze den Score auf 0 und ko_criterion_triggered auf true.\n2. Sprachen:\n  \
+  \  - Der Kandidat besitzt Deutschkenntnisse auf dem Niveau {candidate_german}. Wenn die Stelle Deutsch C1, C2 oder \"verhandlungssicher\"\
+  \ voraussetzt (auch ohne explizite \"Muss\"-Formulierung), setze den Score SOFORT auf 0 und ko_criterion_triggered auf true.\n\
+  \   - Der Kandidat besitzt Englischkenntnisse auf dem Niveau {candidate_english}. ACHTUNG — NUR \"verhandlungssicher Englisch\"\
+  , \"fließend Englisch\", \"fluent English\", \"excellent English\", \"English C1\", \"business fluent\" lösen ein K.O. aus.\n\
+  3. K.O.-Kriterien / Ausschlüsse:\n   - U.S. Staatsbürgerschaft (U.S. citizenship), Sicherheitsfreigabe (Secret/Top Secret\
+  \ clearance) oder TESA-Status: Wenn eines davon erforderlich ist (z.B. {clearance_keywords}), setze den Score auf 0 und\
+  \ ko_criterion_triggered auf true.\n   - Pflichtzertifikate: Wenn die Stelle Zertifizierungen wie Red Hat ({certifications})\
+  \ zwingend voraussetzt und der Kandidat diese nicht hat, setze den Score auf 0.\n   - Bildungsanbieter / Weiterbildungsangebote:\
+  \ Wenn es sich bei dem Angebot um eine reine Umschulung, Ausbildung oder Weiterbildung von einem Bildungsanbieter (z.B.\
+  \ {spam_keywords}) handelt, setze den Score auf 0 und ko_criterion_triggered auf true.\n   - Reine Rechenzentrums-/körperliche\
+  \ Arbeit: Falls die Stelle rein körperliche Rechenzentrumsarbeit wie Verkabelung, Server-Einbau betrifft (z.B. {datacenter_keywords}),\
+  \ setze den Score auf 0 und ko_criterion_triggered auf true.\n   - Full Stack Developer: Wenn der Titel \"Full Stack Developer\"\
+  , \"Fullstack Developer\" oder ähnlich lautet, setze den Score auf 0.\n   - Consultant oder Support Rollen: Wenn der Titel\
+  \ \"Consultant\" oder \"Support\" enthält, setze den Score SOFORT auf 0 und ko_criterion_triggered auf true.\n4. Akademischer\
+  \ Grad: Wenn ein akademisches IT-Studium zwingend und ohne Ausweichklausel (\"oder vergleichbare Berufserfahrung\") gefordert\
+  \ wird, setze den Score auf 0.\n5. Berufserfahrung (IT-Erfahrung seit {career_start_year}): Der Kandidat ist auf Junior-Ebene.\
+  \ Wenn die Stelle mehr als 3 Jahre relevante Berufserfahrung verlangt, bewerte niedrig oder setze auf 0.\n6. Regionale Einschränkung:\n\
+  \   - Stellen vor Ort (On-site) in Frankfurt am Main, Hanau, Offenbach, Hessen (Umkreis bis 35 km) werden positiv bewertet.\n\
+  \   - Stellen vor Ort in anderen Regionen (z.B. Berlin, München, Hamburg) sind K.O. (Score 0).\n\n{rejections_str}\n\nStellenbeschreibung:\n\
+  {job_description}\n\nGib das Ergebnis ausschließlich als valides JSON-Objekt im folgenden Format zurück (ohne Markdown-Formatierung\
+  \ wie ```json):\n{{\n  \"total_score\": 8.5,\n  \"ko_criterion_triggered\": false,\n  \"reasoning\": \"Detaillierte Begründung\
+  \ auf Deutsch, warum dieser Score vergeben wurde...\"\n}}"
+scoring_prompt: "Vergleiche das Kandidatenprofil mit der Stellenbeschreibung (Job Description).\n\nKandidatenprofil (JSON):\n\
+  {candidate_profile}\n\nBewerte das Match auf einer Skala von 0 bis 10.\n\nEin Score von 10 bedeutet perfekte Übereinstimmung.\
+  \ Ein Score von 0 bedeutet, dass K.O.-Kriterien greifen oder die Rolle absolut unpassend ist.\n\nRegeln:\n1. Mindestgehalt:\
+  \ Wenn das erwähnte Jahresgehalt unter {min_salary} € liegt, setze den Score auf 0 und ko_criterion_triggered auf true.\n\
+  2. Sprachen: Der Kandidat spricht Deutsch {candidate_german}, Englisch {candidate_english}. Passe die Bewertung an.\n3.\
+  \ K.O.-Kriterien: Prüfe Sicherheitsfreigaben ({clearance_keywords}), Zertifikate ({certifications}), Bildungsanbieter ({spam_keywords}).\n\
+  4. Berufserfahrung seit {career_start_year}. Bewerte entsprechend der Anforderungen.\n\n{rejections_str}\n\nStellenbeschreibung:\n\
+  {job_description}\n\nGib das Ergebnis als JSON zurück:\n{{\n  \"total_score\": 0.0,\n  \"ko_criterion_triggered\": false,\n\
+  \  \"reasoning\": \"Begründung\"\n}}"
+cover_letter_prompt: "Erstelle ein professionelles Anschreiben auf Deutsch basierend auf dem Kandidatenprofil und der Stellenbeschreibung.\n\
+  \nKandidatenprofil:\n{candidate_profile}\n\nStellenbeschreibung:\n{job_description}\n\nZusätzliche Vorgaben:\n- Gehaltsvorstellung:\
+  \ {salary_exp} € brutto pro Jahr.\n- Verfügbarkeit / Eintrittstermin: {availability}.\n- Sprachniveau Deutsch: {candidate_german}.\n\
+  - Pflichtkompetenzen: {mandatory_skills}.\n\nFormat (DIN 5008):\n1. Betreffzeile (fett): \"Bewerbung als [Position]\" —\
+  \ mit konkreter Position aus der Stellenbeschreibung.\n2. Anrede: \"Sehr geehrte Damen und Herren,\" oder personalisiert\
+  \ falls Ansprechpartner bekannt.\n3. Brieftext (body): Einleitung, Motivation, Kompetenzen, Gehaltsvorstellung, Verfügbarkeit,\
+  \ Schlusssatz.\n4. Grußformel (closing): \"Mit freundlichen Grüßen\".\n\nAntworte NUR mit folgendem JSON-Objekt (kein Markdown,\
+  \ kein ```json):\n{{\n  \"subject\": \"Bewerbung als Cloud Engineer\",\n  \"salutation\": \"Sehr geehrte Damen und Herren,\"\
+  ,\n  \"body\": \"Der vollständige Haupttext des Anschreibens (ohne Betreff, ohne Anrede, ohne Grußformel).\n\nMehrere Absätze\
+  \ durch Leerzeile getrennt.\",\n  \"closing\": \"Mit freundlichen Grüßen\"\n}}"
+form_filler_prompt: "Du bist ein Assistent, der ein Webformular für eine Bewerbung ausfüllt. Analysiere die Liste der interaktiven\
+  \ Elemente (Inputs, Buttons, Uploads) und entscheide für jedes Element, welche Aktion auszuführen ist.\nKandidatenprofil:\n\
+  {candidate_profile}\n\nZusätzliche Angaben:\n- Gehaltsvorstellung: {salary_expectation}\n- Frühestmöglicher Eintrittstermin:\
+  \ {availability}\n- Arbeitserlaubnis für Deutschland vorhanden: {work_permit}\n\nVerfügbare Elemente auf der Seite:\n{elements}\n\
+  \nGib die Liste der auszuführenden Aktionen als JSON-Array von Objekten zurück (ohne Markdown-Wrapper):\n[\n  {{\n    \"\
+  element_id\": \"input-1\",\n    \"action\": \"fill\",\n    \"value\": \"Max\"\n  }},\n  {{\n    \"element_id\": \"upload-cv\"\
+  ,\n    \"action\": \"upload_cv\"\n  }},\n  {{\n    \"element_id\": \"upload-cover\",\n    \"action\": \"upload_cover_letter\"\
+  \n  }},\n  {{\n    \"element_id\": \"submit-btn\",\n    \"action\": \"click\"\n  }}\n]"
+classification_prompt: 'Klassifiziere das folgende Dokument basierend auf den ersten 1000 Zeichen seines Inhalts in eine der
+  folgenden Kategorien:
 
-  - "Lebenslauf" (CV)
+  - Lebenslauf
 
-  - "Anschreiben" (Cover Letter)
+  - Anschreiben
 
-  - "Zertifikat" (Certificate)
+  - Zertifikat
 
-  - "Diplom" (Diploma/Degree/Transcript/Zeugnis)
+  - Diplom
 
-  - "Sonstiges" (Other)
+  - Sonstiges
 
 
-  Text des Dokuments:
+  Textauszug des Dokuments:
 
   {doc_text}
 
 
-  Gib NUR den Kategorienamen zurück (z.B. "Lebenslauf").'
-cover_letter_prompt: "Erstelle ein professionelles Anschreiben auf Deutsch basierend auf dem Kandidatenprofil und der Stellenbeschreibung.\n\nKandidatenprofil:\n{candidate_profile}\n\nStellenbeschreibung:\n\
-  {job_description}\n\nZusätzliche Vorgaben:\n- Gehaltsvorstellung: {salary_exp} € brutto pro Jahr.\n- Verfügbarkeit / Eintrittstermin: {availability}.\n- Sprachniveau Deutsch: {candidate_german}.\n- Pflichtkompetenzen:\
-  \ {mandatory_skills}.\n\nFormat (DIN 5008):\n1. Betreffzeile (fett): \"Bewerbung als [Position]\" — mit konkreter Position aus der Stellenbeschreibung.\n2. Anrede: \"Sehr geehrte Damen und Herren,\" oder\
-  \ personalisiert falls Ansprechpartner bekannt.\n3. Brieftext (body): Einleitung, Motivation, Kompetenzen, Gehaltsvorstellung, Verfügbarkeit, Schlusssatz.\n4. Grußformel (closing): \"Mit freundlichen\
-  \ Grüßen\".\n\nAntworte NUR mit folgendem JSON-Objekt (kein Markdown, kein ```json):\n{{\n  \"subject\": \"Bewerbung als Cloud Engineer\",\n  \"salutation\": \"Sehr geehrte Damen und Herren,\",\n  \"\
-  body\": \"Der vollständige Haupttext des Anschreibens (ohne Betreff, ohne Anrede, ohne Grußformel).\\n\\nMehrere Absätze durch Leerzeile getrennt.\",\n  \"closing\": \"Mit freundlichen Grüßen\"\n}}\n\n\
-  Antworte NUR mit folgendem JSON-Objekt (kein Markdown, kein ```json):\n{{\n  \"subject\": \"Bewerbung als [Position] — mit konkreter Position aus der Stellenbeschreibung\",\n  \"salutation\": \"Sehr geehrte\
-  \ Damen und Herren,\",\n  \"body\": \"Der vollständige Haupttext des Anschreibens (ohne Betreff, ohne Anrede, ohne Grußformel).\\n\\nMehrere Absätze durch Leerzeile getrennt.\",\n  \"closing\": \"Mit\
-  \ freundlichen Grüßen\"\n}}"
-form_filler_prompt: 'Du bist ein KI-Assistent, der Webformulare ausfüllt. Dir liegen die interaktiven Elemente der aktuellen Webseite sowie das Profil des Kandidaten vor.
-
-
-  Kandidatenprofil (JSON):
-
-  {candidate_profile}
-
-
-  Bewerbungs-Einstellungen (defaults):
-
-  - Gehaltsvorstellung: {salary_expectation}
-
-  - Kündigungsfrist / Verfügbarkeit: {availability}
-
-  - Arbeitserlaubnis: {work_permit}
-
-
-  Interaktive Elemente auf der Seite (JSON):
-
-  {elements}
-
-
-  Entscheide für jedes relevante Element auf der Seite, welche Aktion ausgeführt werden soll.
-
-  Mögliche Aktionen:
-
-  - {"action": "fill", "ref_id": "...", "value": "..."}: Für Textfelder (Vorname, Nachname, Email, Telefon, Gehaltsvorstellung etc.)
-
-  - {"action": "click", "ref_id": "..."}: Zum Anklicken von Checkboxen (z.B. Datenschutz, Bestätigungen). HINWEIS: Klicke NICHT auf Submit/Weiter-Buttons, da diese vom Hauptscript gesteuert werden!
-
-  - {"action": "upload_cv", "ref_id": "..."}: Wenn ein Input-Feld (type=file) für den Lebenslauf (CV/Resume) gedacht ist.
-
-  - {"action": "upload_cover_letter", "ref_id": "..."}: Wenn ein Input-Feld (type=file) für das Anschreiben (Cover Letter) gedacht ist.
-
-
-  Gib NUR das reine JSON-Dokument zurück (eine Liste von Aktionen), ohne Erklärungen oder Markdown-Tags.'
-scoring_prompt: "Vergleiche das Kandidatenprofil mit der Stellenbeschreibung (Job Description). Bewerte das Match auf einer Skala von 0 bis 10.\n\nKandidatenprofil:\n{candidate_profile}\n\nStellenbeschreibung:\n\
-  {job_description}\n{rejections_str}\n\nKO-Kriterien (MÜSSEN geprüft werden):\n- Sicherheitsfreigaben: {clearance_keywords}\n- Pflichtzertifikate: {certifications}\n- Bildungsanbieter: {spam_keywords}\n\
-  - Datacenter: {datacenter_keywords}\n- Mindestgehalt: {min_salary} EUR\n- Sprachen: Deutsch {candidate_german}, Englisch {candidate_english}\n- Berufserfahrung seit: {career_start_year}\n\nBewertungskriterien:\n\
-  1. Hard Skills (max 4.0)\n2. Erfahrung/Seniorität (max 3.0)\n3. Sprachen (max 2.0)\n4. Standort (max 1.0)\n\nPflichtkompetenzen: {mandatory_skills}\n\nGib NUR das reine JSON-Dokument zurück:\n{{\n  \"\
-  scores\": {{\"hard_skills\": 0.0, \"experience\": 0.0, \"languages\": 0.0, \"location\": 0.0}},\n  \"total_score\": 0.0,\n  \"reasoning\": \"Begründung\",\n  \"ko_criterion_triggered\": false\n}}"
-scoring_prompt_IT: "Du bist ein erfahrener IT-Recruiter in Deutschland. Vergleiche das Kandidatenprofil mit der Stellenbeschreibung.\n\nKandidatenprofil:\n{candidate_profile}\n\nStellenbeschreibung:\n{job_description}\n\
-  {rejections_str}\n\nRegeln:\n1. Mindestgehalt: unter {min_salary} EUR → Score 0.\n2. Sprachen: Deutsch {candidate_german}, Englisch {candidate_english}.\n3. KO: Sicherheitsfreigaben ({clearance_keywords}),\
-  \ Zertifikate ({certifications}), Bildungsanbieter ({spam_keywords}), Datacenter ({datacenter_keywords}).\n4. Full Stack Developer / Consultant / Support → Score 0.\n5. Berufserfahrung seit {career_start_year}.\n\
-  \nPflichtkompetenzen: {mandatory_skills}\n\nGib NUR JSON zurück:\n{{\n  \"total_score\": 0.0,\n  \"ko_criterion_triggered\": false,\n  \"reasoning\": \"Begründung\"\n}}"
+  Antworte ausschließlich mit dem Namen der Kategorie (z.B. Lebenslauf).'
 extract_recruiter_prompt: 'Extrahiere den vollständigen Namen des Recruiters/Ansprechpartners aus der folgenden Stellenbeschreibung.
 
 
@@ -83,16 +112,29 @@ extract_recruiter_prompt: 'Extrahiere den vollständigen Namen des Recruiters/An
 
 
   Gib NUR den Namen zurück (z.B. "Max Mustermann"). Wenn kein Name gefunden wird, gib eine leere Zeile zurück.'
-job_intake_prompt: "Du bist ein Job-Intake-Analyst. Analysiere eine Stellenanzeige VOLLSTÄNDIG und liefere alle Metadaten, Branche, Titel-Prüfung und KO-Check in EINEM JSON.\n\n== SEITENTITEL ==\n{page_title}\n\
-  \n== SEITENINHALT (Anfang) ==\n{page_text}\n\n== URL ==\n{url}\n\n== KANDIDATENPROFIL ==\n{candidate_profile}\n\n== AUSSCHLUSSKRITERIEN ==\n- Gesperrte Unternehmen: {excluded_companies}\n- Verbotene Jobtitel:\
-  \ {forbidden_titles}\n- Sicherheitsfreigaben: {clearance_keywords}\n- Pflichtzertifikate: {mandatory_certifications}\n- Spam-Bildungsanbieter: {spam_keywords}\n- Datacenter: {datacenter_keywords}\n- Min.\
-  \ Gehalt: {min_salary} EUR\n- Sprachen: Deutsch {candidate_german}, Englisch {candidate_english}\n\n== BEREITS BEWORBEN ==\n{previous_applications}\n\nAUFGABEN:\n1. Seitenvalidität prüfen (Dead-Link?\
-  \ Suchseite? 404?)\n2. Firmenname und Jobtitel extrahieren + bereinigen\n3. Branche bestimmen (IT/Handwerk/Allgemein)\n4. Jobtitel gegen Senioritätslevel prüfen:\n   - IT-Junior: Blockiere Senior, Middle,\
-  \ Lead, Architect, Principal, Head of, Full Stack Dev, Consultant, Helpdesk\n   - Handwerk-Expert: Erlaube alle Handwerk-Titel\n   - Global: Blockiere Projektmanager, Sales, Marketing Manager, HR\n5.\
-  \ Duplikate mit bisherigen Bewerbungen prüfen\n6. KO-Filter prüfen\n\nAntworte NUR mit diesem JSON (kein Markdown):\n{{\n  \"is_valid_job\": true,\n  \"invalid_reason\": null,\n  \"company_name\": \"\
-  Firmenname ohne Rechtsform\",\n  \"job_title\": \"Berufsbezeichnung\",\n  \"industry\": \"IT\",\n  \"industry_reasoning\": \"Begründung\",\n  \"forbidden_title_detected\": false,\n  \"forbidden_title_reason\"\
-  : null,\n  \"is_duplicate\": false,\n  \"duplicate_of\": null,\n  \"ko_triggered\": false,\n  \"ko_reason\": null\n}}"
-classify_document_prompt: "Klassifiziere das folgende Dokument anhand von Dateiname und Textinhalt.\n\nDateiname: {filename}\nErste 1500 Zeichen des Textes:\n{doc_text}\n\nKategorien:\n- \"Lebenslauf\"\
-  : CV, Curriculum Vitae, Werdegang\n- \"Anschreiben\": Bewerbungsschreiben, Cover Letter\n- \"Arbeitszeugnis\": Arbeitsbescheinigung\n- \"Zertifikat\": Fortbildungsnachweis, Certificate\n- \"Diplom\":\
-  \ Abschlusszeugnis, Bachelor/Master-Urkunde, Schulzeugnis\n- \"Sonstiges\": Andere Dokumente\n\nAntworte NUR mit JSON (kein Markdown):\n{{\n  \"classification\": \"Lebenslauf\",\n  \"confidence\": 0.95,\n\
-  \  \"reasoning\": \"Begründung\"\n}}"
+job_intake_prompt: "Du bist ein Job-Intake-Analyst. Analysiere eine Stellenanzeige VOLLSTÄNDIG und extrahiere alle Metadaten,\
+  \ prüfe Ausschlusskriterien und erkenne die Branche.\n\n== SEITENTITEL ==\n{page_title}\n\n== SEITENINHALT (Anfang) ==\n\
+  {page_text}\n\n== URL ==\n{url}\n\n== KANDIDATENPROFIL ==\n{candidate_profile}\n\n== AUSSCHLUSSKRITERIEN (KO-Filter) ==\n\
+  - Gesperrte Unternehmen: {excluded_companies}\n- Verbotene Jobtitel (statisch): {forbidden_titles}\n- Verbotene Keywords\
+  \ (Sicherheitsfreigaben): {clearance_keywords}\n- Pflichtzertifikate: {mandatory_certifications}\n- Spam-Bildungsanbieter:\
+  \ {spam_keywords}\n- Datacenter-Keywords: {datacenter_keywords}\n- Min. Gehalt: {min_salary} EUR\n- Sprachniveau Deutsch:\
+  \ {candidate_german}, Englisch: {candidate_english}\n\n== BEREITS BEWORBEN (zur Duplikaterkennung) ==\n{previous_applications}\n\
+  \nAUFGABEN:\n1. Prüfe, ob es sich um eine gültige Stellenanzeige handelt (kein Dead-Link, keine Suchseite, keine 404-Seite).\n\
+  2. Extrahiere Firmenname und Jobtitel aus Titel + Text. Bereinige den Firmennamen (entferne GmbH, AG, SE, KG, e.V. etc.).\n\
+  3. Bestimme die Branche (IT, Handwerk, Allgemein, Bildung/Lehre) anhand des Textes UND des Kandidatenprofils.\n4. Prüfe,\
+  \ ob der Jobtitel gegen die forbidden_titles-Regeln oder das Senioritätslevel des Kandidaten verstösst:\n   - Kandidat mit\
+  \ IT-Junior-Level (0-3 Jahre): Blockiere Senior, Middle, Lead, Architect, Principal, Head of, Full Stack Developer, Consultant,\
+  \ Helpdesk.\n   - Kandidat mit Handwerk-Expert-Level: Erlaube alle Handwerk-Titel.\n   - Global blockieren: Projektmanager,\
+  \ Sales, Marketing Manager, HR.\n5. Prüfe auf Duplikate mit bereits beworbenen Stellen.\n6. Prüfe KO-Filter: Unternehmen\
+  \ auf Blacklist, Sicherheitsfreigaben, Spam-Bildungsanbieter.\n\nAntworte NUR mit diesem JSON-Objekt (kein Markdown):\n\
+  {{\n  \"is_valid_job\": true,\n  \"invalid_reason\": null,\n  \"company_name\": \"Bereinigter Firmenname (ohne GmbH, AG,\
+  \ etc.)\",\n  \"job_title\": \"Berufsbezeichnung\",\n  \"industry\": \"IT\",\n  \"industry_reasoning\": \"Kurze Begründung\
+  \ für Branchenwahl\",\n  \"forbidden_title_detected\": false,\n  \"forbidden_title_reason\": null,\n  \"is_duplicate\":\
+  \ false,\n  \"duplicate_of\": null,\n  \"ko_triggered\": false,\n  \"ko_reason\": null\n}}"
+classify_document_prompt: "Klassifiziere das folgende Dokument anhand von Dateiname und Textinhalt.\n\nDateiname: {filename}\n\
+  Erste 1500 Zeichen des Textes:\n{doc_text}\n\nKategorien:\n- \"Lebenslauf\": CV, Curriculum Vitae, Werdegang, mit persönlichen\
+  \ Daten und Berufserfahrung\n- \"Anschreiben\": Bewerbungsschreiben, Motivationsschreiben, Cover Letter\n- \"Arbeitszeugnis\"\
+  : Arbeitsbescheinigung, Beurteilung vom Arbeitgeber\n- \"Zertifikat\": Fortbildungsnachweis, Teilnahmebestätigung, Certificate\n\
+  - \"Diplom\": Abschlusszeugnis, Universitätsdiplom, Bachelor/Master-Urkunde, Schulzeugnis, Transcript\n- \"Sonstiges\":\
+  \ Dokumente, die in keine andere Kategorie passen\n\nAntworte NUR mit einem JSON-Objekt (kein Markdown):\n{{\n  \"classification\"\
+  : \"Lebenslauf\",\n  \"confidence\": 0.95,\n  \"reasoning\": \"Kurze Begründung\"\n}}"

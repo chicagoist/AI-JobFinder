@@ -403,7 +403,7 @@ def run_config_gui(config_path, criteria_path, profile_path, prompts_path):
     search_cfg = criteria_data.get("search", {})
     ttk.Label(tab4, text="Search Industry:").grid(row=25, column=0, sticky="w", padx=10, pady=5)
     industry_var = tk.StringVar(value=search_cfg.get("industry", "IT"))
-    industry_combo = ttk.Combobox(tab4, textvariable=industry_var, values=["IT", "Handwerk", "Allgemein"], state="readonly", width=15)
+    industry_combo = ttk.Combobox(tab4, textvariable=industry_var, values=["IT", "Handwerk", "Allgemein", "Bildung/Lehre"], state="readonly", width=15)
     industry_combo.grid(row=25, column=1, sticky="w", padx=10, pady=5)
 
     def save_and_close():

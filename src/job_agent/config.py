@@ -8,6 +8,54 @@ from job_agent.utils import Colors
 
 # Default Prompt Templates used by the agent
 DEFAULT_PROMPTS = {
+    "scoring_prompt_Bildung/Lehre": """Du bist ein erfahrener Personalreferent für den Bildungssektor in Deutschland. Vergleiche das Kandidatenprofil mit der Stellenbeschreibung (Job Description).
+
+Kandidatenprofil (JSON):
+{candidate_profile}
+
+Bewerte das Match auf einer Skala von 0 bis 10.
+
+Ein Score von 10 bedeutet perfekte Übereinstimmung. Ein Score von 0 bedeutet, dass K.O.-Kriterien greifen oder die Rolle absolut unpassend ist.
+
+Du MUSST die folgenden Regeln strikt anwenden:
+1. Mindestgehalt: Wenn das in der Anzeige erwähnte Jahresgehalt unter {min_salary} € liegt, setze den Score auf 0 und ko_criterion_triggered auf true.
+2. Sprachen:
+   - Der Kandidat besitzt Deutschkenntnisse auf dem Niveau {candidate_german}. Wenn die Stelle Deutsch C2 oder "verhandlungssicher" voraussetzt (besonders für Deutsch-/DaZ-Lehrkräfte), prüfe kritisch, ob eine Ausweichklausel ("oder vergleichbare Kenntnisse") existiert. Für MINT-Fächer (Chemie, Mathe, Informatik) ist B1 mit Fachvokabular oft ausreichend.
+   - Der Kandidat besitzt Englischkenntnisse auf dem Niveau {candidate_english}. Englisch wird nur für internationale Schulen oder spezielle Programme benötigt.
+3. K.O.-Kriterien / Ausschlüsse:
+   - U.S. Staatsbürgerschaft (U.S. citizenship), Sicherheitsfreigabe (Secret/Top Secret clearance) oder TESA-Status: Wenn eines davon erforderlich ist (z.B. {clearance_keywords}), setze den Score auf 0 und ko_criterion_triggered auf true.
+   - Pflichtzertifikate: Wenn die Stelle Zertifizierungen ({certifications}) zwingend voraussetzt und der Kandidat diese nicht hat, setze den Score auf 0.
+   - Bildungsanbieter: Wenn es sich bei dem Angebot um eine reine Umschulung, Ausbildung oder Weiterbildung mit Förderung durch {spam_keywords} handelt (statt einer Festanstellung), setze den Score auf 0 und ko_criterion_triggered auf true.
+4. Unterrichtsfächer:
+   - Der Kandidat unterrichtet Chemie, Mathematik und Informatik (mit 22+ Jahren Erfahrung).
+   - Wenn die Stelle überwiegend andere Fachrichtungen verlangt (z.B. nur Biologie, nur Physik, nur Sprachen), bewerte niedriger.
+   - Fächerübergreifender Unterricht oder MINT-Schwerpunkt wird positiv bewertet.
+5. Schulform / Zielgruppe:
+   - Berufsschule (gelernte Fachrichtung: Chemie, Informatik, Finanzen) ist ideal.
+   - Realschule / Gymnasium / Gesamtschule: gut geeignet.
+   - Grundschule: Weniger passend — niedrigere Punktzahl.
+   - Erwachsenenbildung / Volkshochschule: Sehr gut geeignet (der Kandidat hat langjährige Erfahrung mit erwachsenen Lernenden).
+6. Berufserfahrung (seit {career_start_year}):
+   - Der Kandidat hat 22+ Jahre Unterrichtserfahrung.
+   - Senior-/Erfahrene-Lehrkräfte-Rollen werden positiv bewertet.
+   - Quereinsteiger-Programme sind akzeptabel, aber volle Lehrbefähigung ist vorzuziehen.
+7. Region:
+   - Hanau, Frankfurt am Main, Offenbach, Rhein-Main-Gebiet (Umkreis bis 50 km) werden positiv bewertet.
+   - Andere Regionen: Niedrigere Punktzahl, aber kein automatisches K.O.
+
+{rejections_str}
+
+Pflichtkompetenzen für diese Branche (in der Bewertung gewichten): {mandatory_skills}
+
+Stellenbeschreibung:
+{job_description}
+
+Gib das Ergebnis ausschließlich als valides JSON-Objekt im folgenden Format zurück (ohne Markdown-Formatierung wie ```json):
+{{
+  "total_score": 7.5,
+  "ko_criterion_triggered": false,
+  "reasoning": "Detaillierte Begründung auf Deutsch, warum dieser Score vergeben wurde..."
+}}""",
     "scoring_prompt_IT": """Du bist ein erfahrener IT-Recruiter in Deutschland. Vergleiche das Kandidatenprofil mit der Stellenbeschreibung (Job Description).
 
 Kandidatenprofil (JSON):
@@ -180,7 +228,7 @@ Gib NUR den Namen zurück (z.B. "Max Mustermann"). Wenn kein Name gefunden wird,
 AUFGABEN:
 1. Prüfe, ob es sich um eine gültige Stellenanzeige handelt (kein Dead-Link, keine Suchseite, keine 404-Seite).
 2. Extrahiere Firmenname und Jobtitel aus Titel + Text. Bereinige den Firmennamen (entferne GmbH, AG, SE, KG, e.V. etc.).
-3. Bestimme die Branche (IT, Handwerk, Allgemein) anhand des Textes UND des Kandidatenprofils.
+3. Bestimme die Branche (IT, Handwerk, Allgemein, Bildung/Lehre) anhand des Textes UND des Kandidatenprofils.
 4. Prüfe, ob der Jobtitel gegen die forbidden_titles-Regeln oder das Senioritätslevel des Kandidaten verstösst:
    - Kandidat mit IT-Junior-Level (0-3 Jahre): Blockiere Senior, Middle, Lead, Architect, Principal, Head of, Full Stack Developer, Consultant, Helpdesk.
    - Kandidat mit Handwerk-Expert-Level: Erlaube alle Handwerk-Titel.
