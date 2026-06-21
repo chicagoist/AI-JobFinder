@@ -15,6 +15,8 @@ AI-assisted job application tool for the German-speaking market. Searches offici
 | Service | Usage | GDPR Safe? |
 |---------|-------|------------|
 | **Ollama** (default LLM) | Local scoring, cover letters, CV parsing — **no data leaves your machine** | ✅ Fully local |
+| **Jooble API** (job source) | Job search aggregator REST API — covers Germany with free tier | ✅ Local API call only |
+| **Adzuna API** (job source) | Global job search REST API with Germany coverage — free tier | ✅ Local API call only |
 | **Gemini** (optional fallback) | Fallback LLM when local model unavailable | ❌ PII sent to US |
 | **OpenRouter** (optional fallback) | Free fallback LLM | ❌ PII sent to US |
 
@@ -89,6 +91,8 @@ The `JobPipeline` orchestrator in `src/job_agent/pipeline.py` processes each job
 - `search_all_sources(query, location, radius)` from `job_sources/`
 - **Bundesagentur für Arbeit** — API v6: `POST https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v6/jobs` with public `X-API-Key: jobboerse-jobsuche` header. Returns JSON with `ergebnisliste`.
 - **Arbeitnow** — free API: `GET https://www.arbeitnow.com/api/job-board/api`. No authentication.
+- **Jooble** — free aggregator API: `POST https://jooble.org/api/{key}`. Requires `JOOBLE_API_KEY` env var. Returns jobs from multiple job boards via a single endpoint.
+- **Adzuna** — free global job API: `GET https://api.adzuna.com/v1/api/jobs/de/search`. Requires `ADZUNA_APP_ID` and `ADZUNA_APP_KEY` env vars. Provides salary data, company info, and direct apply URLs.
 - Deduplication by URL, sorted, limited to `max_results` (~25)
 - Returns `list[JobPosting]` dataclass (url, title, company, description, salary, location, source)
 
@@ -157,7 +161,7 @@ llm_request_with_fallback(prompt)
 
 | Legal Risk | Mitigation | Status |
 |-----------|-----------|--------|
-| Web scraping ToS violations | Official APIs (Bundesagentur + Arbeitnow) | ✅ |
+| Web scraping ToS violations | Official APIs (Bundesagentur + Arbeitnow + Jooble + Adzuna) | ✅ |
 | Automated profiling (GDPR Art. 22) | Human-in-the-loop: user reviews all scores | ✅ |
 | PII transfer to US (Schrems II) | Default LLM is local (Ollama), cloud is opt-in fallback | ✅ |
 | Unauthorized recruiter outreach | `.eml` drafts only — manual sending required | ✅ |
@@ -173,7 +177,7 @@ The diagram below shows the **GDPR-compliant Pipeline mode**. Legacy mode (web s
 ```mermaid
 flowchart TD
     INIT["⚙️ INIT: Config + DB + LLM + Docs"]
-    INIT --> SEARCH["🔍 STAGE 1: Search<br/>Bundesagentur API + Arbeitnow API<br/>NO web scraping"]
+    INIT -->    SEARCH["🔍 STAGE 1: Search<br/>Bundesagentur + Arbeitnow + Jooble + Adzuna<br/>NO web scraping — official REST APIs"]
     SEARCH --> INTAKE["📋 STAGE 2: Intake Check<br/>LLM validation + KO filters"]
     INTAKE --> INT_KO{Valid?}
     INT_KO -- "KO / Duplicate" --> SKIP1["⏭️ SKIP"]
@@ -335,6 +339,26 @@ user_profile:
 | **How to set** | Environment variables: `GROQ_API_KEY` or `GROQ_KEY`. Custom model via `GROQ_MODEL`. |
 | **Usage** | Experimental module `job_agent/groq_llm.py`. Not used unless explicitly configured. |
 
+#### Jooble API Key (job source — free tier)
+
+| Item | Detail |
+|------|--------|
+| **Where to get** | https://jooble.org/api |
+| **Cost** | Free tier available (rate-limited). Register for a publisher account to receive your API key. |
+| **What it's used for** | Searching job listings in Germany via Jooble's job aggregator REST API (`POST https://jooble.org/api/{key}`). Returns structured job data: title, company, location, salary, description, direct link. |
+| **How to set** | Environment variable `JOOBLE_API_KEY` (preferred). See [Setting Environment Variables](#setting-environment-variables) below. |
+| **GDPR** | ✅ Safe — only API calls (keyword + location) sent to Jooble server. No PII transmitted. |
+
+#### Adzuna API Key (job source — free tier)
+
+| Item | Detail |
+|------|--------|
+| **Where to get** | https://developer.adzuna.com/ |
+| **Cost** | Free tier available (rate-limited). Register to receive your `app_id` and `api_key`. |
+| **What it's used for** | Searching job listings in Germany via the Adzuna API (`GET https://api.adzuna.com/v1/api/jobs/de/search`). Returns job titles, companies, locations, salary ranges, descriptions, and redirect URLs. |
+| **How to set** | Two environment variables: `ADZUNA_APP_ID` and `ADZUNA_APP_KEY`. See [Setting Environment Variables](#setting-environment-variables) below. |
+| **GDPR** | ✅ Safe — only API calls (keyword + location) sent to Adzuna server. No PII transmitted. |
+
 ---
 
 ### Setting Environment Variables
@@ -347,12 +371,17 @@ Some API keys (OpenRouter, DeepSeek, Groq) are read from **environment variables
 
 | Variable | Service | Priority | Example |
 |----------|---------|----------|---------|
-| `OPENROUTER_API_KEY` | OpenRouter | 🔴 Required (if using OpenRouter) | `sk-or-v1-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
-| `OPENROUTER_MODEL` | OpenRouter model | 🟡 Optional | `openai/gpt-oss-120b:free` |
+| `JOOBLE_API_KEY` | Jooble | 🟡 Optional (recommended) | `xxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
+| `ADZUNA_APP_ID` | Adzuna | 🟡 Optional (recommended) | `xxxxxxxx` |
+| `ADZUNA_APP_KEY` | Adzuna | 🟡 Optional (recommended) | `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
+| `OPENROUTER_API_KEY` | OpenRouter | 🟡 Optional (fallback LLM) | `sk-or-v1-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
+| `OPENROUTER_MODEL` | OpenRouter model | 🟢 Optional | `openai/gpt-oss-120b:free` |
 | `DEEPSEEK_API_KEY` | DeepSeek | 🟢 Optional | `sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
 | `DEEPSEEK_MODEL` | DeepSeek model | 🟢 Optional | `deepseek-v4-flash` |
 | `GROQ_API_KEY` | Groq | 🟢 Optional | `gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
 | `GROQ_MODEL` | Groq model | 🟢 Optional | `llama-3.3-70b-versatile` |
+
+> **Jooble** and **Adzuna** are job search API sources — they increase the number of jobs found per search. If not configured, the pipeline simply skips them with a yellow warning (graceful degradation).
 
 > **Note:** Gemini API keys are stored in `config.yaml` (not environment variables) — they are read directly from the config file.
 
@@ -371,6 +400,9 @@ Some API keys (OpenRouter, DeepSeek, Groq) are read from **environment variables
 ##### Method 2: PowerShell (permanent, current user)
 
 ```powershell
+[System.Environment]::SetEnvironmentVariable('JOOBLE_API_KEY', 'xxxxxxxxxxxxxxxxxxxxxxxxxxxx', 'User')
+[System.Environment]::SetEnvironmentVariable('ADZUNA_APP_ID', 'xxxxxxxx', 'User')
+[System.Environment]::SetEnvironmentVariable('ADZUNA_APP_KEY', 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', 'User')
 [System.Environment]::SetEnvironmentVariable('OPENROUTER_API_KEY', 'sk-or-v1-xxxxxxxxxxxxx', 'User')
 [System.Environment]::SetEnvironmentVariable('OPENROUTER_MODEL', 'openai/gpt-oss-120b:free', 'User')
 ```
@@ -380,6 +412,9 @@ Some API keys (OpenRouter, DeepSeek, Groq) are read from **environment variables
 ##### Method 3: Command Prompt (permanent, current user)
 
 ```cmd
+setx JOOBLE_API_KEY "xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+setx ADZUNA_APP_ID "xxxxxxxx"
+setx ADZUNA_APP_KEY "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 setx OPENROUTER_API_KEY "sk-or-v1-xxxxxxxxxxxxx"
 setx OPENROUTER_MODEL "openai/gpt-oss-120b:free"
 ```
@@ -405,6 +440,13 @@ Add to `~/.bashrc` (Bash) or `~/.zshrc` (Zsh):
 # OpenRouter — free LLM fallback
 export OPENROUTER_API_KEY="sk-or-v1-xxxxxxxxxxxxx"
 export OPENROUTER_MODEL="openai/gpt-oss-120b:free"
+
+# Job sources — Jooble (recommended)
+export JOOBLE_API_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Job sources — Adzuna (recommended)
+export ADZUNA_APP_ID="xxxxxxxx"
+export ADZUNA_APP_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 # Optional: DeepSeek
 export DEEPSEEK_API_KEY="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"

@@ -26,12 +26,13 @@ import sqlite3
 from typing import Optional, cast
 from dataclasses import dataclass
 
-from job_agent.utils import Colors, clean_and_repair_json, TeeStdout
+from job_agent.utils import Colors, clean_and_repair_json, TeeStdout, compact_profile_for_llm
 from job_agent.config import load_config, load_criteria, PROMPTS
 from job_agent.db import init_db, log_application, get_past_rejections
 from job_agent import llm as _llm
 from job_agent.llm import init_gemini, llm_request_with_fallback
 from job_agent.ollama_llm import ollama_available
+from job_agent.llama_server_llm import llama_server_available
 from job_agent.job_sources import search_all_sources, JobPosting
 from job_agent.email_draft_generator import generate_email_draft
 from job_agent.direct_email_applier import extract_contact_info, \
@@ -209,7 +210,7 @@ class JobPipeline:
             page_title=f"{job.title} — {job.company}",
             page_text=job.description[:3000] if job.description else "",
             url=job.url,
-            candidate_profile=json.dumps(self.candidate_profile, ensure_ascii=False, indent=2),
+            candidate_profile=compact_profile_for_llm(self.candidate_profile),
             excluded_companies=", ".join(ko.get("companies_blacklist", [])) or "Keine",
             forbidden_titles=", ".join(ko.get("forbidden_titles", [])) or "Keine",
             clearance_keywords=", ".join(ko.get("clearances", {}).get("forbidden_keywords", [])) or "Keine",
@@ -278,7 +279,7 @@ class JobPipeline:
             prompt_key = "scoring_prompt"
 
         prompt = PROMPTS.get(prompt_key).format(
-            candidate_profile=json.dumps(self.candidate_profile, ensure_ascii=False, indent=2),
+            candidate_profile=compact_profile_for_llm(self.candidate_profile),
             job_description=job.description,
             rejections_str=rejections_str,
             career_start_year=self.criteria.get("cover_letter", {}).get("career_start_year", 2010),
@@ -326,7 +327,7 @@ class JobPipeline:
         mandatory_skills = industry_cfg.get("cover_letter", {}).get("mandatory_skills", [])
 
         prompt = PROMPTS.get(prompt_key).format(
-            candidate_profile=json.dumps(self.candidate_profile, ensure_ascii=False, indent=2),
+            candidate_profile=compact_profile_for_llm(self.candidate_profile),
             job_description=job.description,
             cv_text=cv_text or "Nicht verfügbar",
             salary_exp=self.config.get("defaults", {}).get("salary_expectation", "nach Vereinbarung"),
@@ -476,63 +477,52 @@ class JobPipeline:
         pdf_path: Optional[str] = None,
         terminal_output: Optional[str] = None,
     ) -> Optional[str]:
-        """Generate .eml draft file for manual review and sending.
+        """Generate .eml draft for candidate ONLY (no employer email).
 
-        No SMTP involved — GDPR compliance. Returns path to .eml file.
+        GDPR compliance + user request: all drafts go to the candidate's
+        email address for manual review. No auto-send to employers.
+        Returns path to .eml file.
         """
         self.initialize()
 
-        # Try to extract recruiter contact from job description
-        contact = extract_contact_info(job.description)
-        if not contact:
-            print(f"{Colors.YELLOW}No contact email found in job description. Draft will be for candidate reference.{Colors.END}")
-            # Generate draft for candidate's own email
-            candidate_email = self.candidate_profile.get("personal_info", {}).get("email")
-            if not candidate_email:
-                print(f"{Colors.RED}No candidate email configured. Cannot generate draft.{Colors.END}")
-                return None
-            contact = {"email": candidate_email, "recruiter_name": None}
+        candidate_email = self.candidate_profile.get("personal_info", {}).get("email")
+        if not candidate_email:
+            print(f"{Colors.RED}No candidate email configured. Cannot generate draft.{Colors.END}")
+            return None
 
-        # Personalize anschreiben if recruiter name is known
+        # Extract recruiter contact info for personalization (optical, not email target)
+        contact = extract_contact_info(job.description)
+
+        # Build the full anschreiben text with optional personalization
         full_text = anschreiben_data.get("full_text", "")
-        if contact.get("recruiter_name"):
+        if contact and contact.get("recruiter_name"):
             full_text = personalize_anschreiben(full_text, contact["recruiter_name"])
 
-        # Collect attachments
+        # Collect attachments: PDF, CV, certificates
         attachments = []
         if pdf_path and os.path.exists(pdf_path):
             attachments.append(pdf_path)
         attachments.extend(self._collect_candidate_docs())
 
+        # Build a candidate contact with metadata for the draft
+        candidate_contact = {
+            "email": candidate_email,
+            "recruiter_name": contact.get("recruiter_name", "") if contact else "",
+        }
+
+        # Generate SINGLE draft for candidate (is_candidate_copy=True includes metadata)
         draft_path = generate_email_draft(
             smtp_config=self.config.get("smtp", {}),
             candidate_profile=self.candidate_profile,
-            contact=contact,
+            contact=candidate_contact,
             anschreiben_text=full_text,
             attachment_paths=attachments,
             job_title=job.title,
             company_name=job.company,
             url=job.url,
             terminal_output=terminal_output,
-            is_candidate_copy=False,
+            is_candidate_copy=True,
         )
-
-        # Also generate CC copy for candidate
-        candidate_email = self.candidate_profile.get("personal_info", {}).get("email")
-        if candidate_email and contact["email"] != candidate_email:
-            cc_contact = {"email": candidate_email, "recruiter_name": contact.get("recruiter_name")}
-            generate_email_draft(
-                smtp_config=self.config.get("smtp", {}),
-                candidate_profile=self.candidate_profile,
-                contact=cc_contact,
-                anschreiben_text=full_text,
-                attachment_paths=attachments,
-                job_title=job.title,
-                company_name=job.company,
-                url=job.url,
-                terminal_output=terminal_output,
-                is_candidate_copy=True,
-            )
 
         return draft_path
 
@@ -1152,21 +1142,24 @@ def run_pipeline_mode(
     )
     pipeline.initialize()
 
-    # --- Early exit: Local LLM required but Ollama is not running ---
+    # --- Early exit: Local LLM required but neither llama-server nor Ollama is running ---
     if _llm.PRIORITY_LLM == "local" and not _llm.ALLOW_CLOUD_FALLBACK:
-        if not ollama_available(_llm.LOCAL_MODEL):
+        local_available = llama_server_available() or ollama_available(_llm.LOCAL_MODEL)
+        if not local_available:
             if ignore_ollama:
                 print(f"\n{Colors.YELLOW}{Colors.BOLD}{'='*60}{Colors.END}")
-                print(f"{Colors.YELLOW}{Colors.BOLD}  Warning: Local LLM required but Ollama is not running.{Colors.END}")
+                print(f"{Colors.YELLOW}{Colors.BOLD}  Warning: Local LLM required but neither llama-server nor Ollama is running.{Colors.END}")
                 print(f"{Colors.YELLOW}  Proceeding due to --ignore-ollama flag. Jobs will score 0/10.{Colors.END}")
-                print(f"{Colors.YELLOW}  Start Ollama for real results: ollama serve{Colors.END}")
+                print(f"{Colors.YELLOW}  Start: llama-server --model <gguf> --port 8080 OR ollama serve{Colors.END}")
                 print(f"{Colors.YELLOW}{Colors.BOLD}{'='*60}{Colors.END}\n")
             else:
+                from job_agent.utils import IS_WINDOWS
+                ls_path = "/tmp/llama.cpp/build-cpu/bin/llama-server" if not IS_WINDOWS else "C:\\llama.cpp\\build\\bin\\Release\\llama-server.exe"
                 print(f"\n{Colors.RED}{Colors.BOLD}{'='*60}{Colors.END}")
-                print(f"{Colors.RED}{Colors.BOLD}  ❌ Local LLM required. Start Ollama:{Colors.END}")
-                print(f"{Colors.CYAN}     ollama serve{Colors.END}")
-                print(f"{Colors.GREY}     Or if already installed: ollama run {_llm.LOCAL_MODEL}{Colors.END}")
-                print(f"{Colors.GREY}     Model needed: {_llm.LOCAL_MODEL}{Colors.END}")
+                print(f"{Colors.RED}{Colors.BOLD}  ❌ Local LLM required!{Colors.END}")
+                print(f"{Colors.CYAN}     llama-server: {ls_path} --model <gguf> --port 8080{Colors.END}")
+                print(f"{Colors.GREY}     Or if using Ollama: ollama serve{Colors.END}")
+                print(f"{Colors.GREY}     Model needed (Ollama): {_llm.LOCAL_MODEL}{Colors.END}")
                 print(f"{Colors.RED}{Colors.BOLD}{'='*60}{Colors.END}\n")
                 return
 

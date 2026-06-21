@@ -33,9 +33,8 @@ from job_agent.llm import init_gemini
 from job_agent.direct_email_applier import (
     extract_contact_info,
     personalize_anschreiben,
-    generate_direct_email_draft,
-    collect_relevant_attachments,
 )
+from job_agent.pipeline import JobPipeline
 from playwright.sync_api import sync_playwright
 
 # ─── DB helpers ──────────────────────────────────────────────────────────────
@@ -245,30 +244,39 @@ def retry_single(db_id: int) -> int:
         print(f"{Colors.YELLOW}Warning: Could not generate PDF: {e}. Proceeding without PDF attachment.{Colors.END}")
         pdf_path = ""
 
-    # Collect attachments
+    # Collect attachments via pipeline helper
     print(f"{Colors.BLUE}Collecting attachments...{Colors.END}")
-    conn = sqlite3.connect(DB_PATH)
-    attachments = collect_relevant_attachments(conn, job_text, pdf_path, WORKSPACE_DIR)
-    conn.close()
+    pipeline = JobPipeline(workspace_dir=WORKSPACE_DIR)
+    pipeline.initialize()
+    attachments = pipeline._collect_candidate_docs()
+    if pdf_path and os.path.exists(pdf_path):
+        attachments.insert(0, pdf_path)
 
     if not attachments:
         print(f"{Colors.YELLOW}Warning: No attachments found (no CV PDF indexed?).{Colors.END}")
 
-    # GDPR: Generate draft instead of auto-sending
-    print(f"\n{Colors.BLUE}Generating draft for {contact['email']} (GDPR: no auto-send)...{Colors.END}")
-    success = generate_direct_email_draft(
+    # Generate candidate-only draft (GDPR: no auto-send, no employer)
+    print(f"\n{Colors.BLUE}Generating candidate-only draft...{Colors.END}")
+    candidate_contact = {
+        "email": candidate_email,
+        "recruiter_name": contact.get("recruiter_name", "") if contact else "",
+    }
+    from job_agent.email_draft_generator import generate_email_draft
+    draft_path = generate_email_draft(
         smtp_config=smtp_config,
         candidate_profile=candidate_profile,
-        contact=contact,
+        contact=candidate_contact,
         anschreiben_text=ans_text,
         attachment_paths=attachments,
         job_title=title,
         company_name=company,
         url=url,
+        terminal_output=tee.getvalue() if tee else None,
+        is_candidate_copy=True,
     )
 
-    if success:
-        new_status = "Applied (Direct Email)" if not fallback_mode else "Applied (Email)"
+    if draft_path:
+        new_status = "Draft Generated (Retry)"
         update_status(db_id, new_status, email_sent=1)
         # Save terminal output to DB
         try:
@@ -284,11 +292,12 @@ def retry_single(db_id: int) -> int:
         except Exception:
             pass
         print(f"\n{Colors.GREEN}{'='*70}{Colors.END}")
-        print(f"{Colors.GREEN}✅ Email sent! Status updated to '{new_status}'{Colors.END}")
+        print(f"{Colors.GREEN}✅ Candidate draft generated: {draft_path}{Colors.END}")
+        print(f"{Colors.YELLOW}📤 Bitte öffnen und manuell versenden.{Colors.END}")
         return 0
     else:
         print(f"\n{Colors.RED}{'='*70}{Colors.END}")
-        print(f"{Colors.RED}❌ Failed to send email. SMTP connection or credentials issue.{Colors.END}")
+        print(f"{Colors.RED}❌ Failed to generate candidate draft.{Colors.END}")
         return 1
 
 

@@ -4,7 +4,29 @@ import sys
 import yaml
 import json
 import shutil
-from job_agent.utils import Colors
+from job_agent.utils import Colors, IS_WINDOWS
+
+# ---------------------------------------------------------------------------
+# Platform-appropriate default paths
+# ---------------------------------------------------------------------------
+
+def get_default_chrome_path() -> str:
+    """Return the default Chrome user data directory for the current OS."""
+    if IS_WINDOWS:
+        return r"C:\Users\<Username>\AppData\Local\Google\Chrome\User Data"
+    # Linux (~/.config/google-chrome) or macOS (~/Library/Application Support/Google/Chrome)
+    import sys
+    if sys.platform.startswith("darwin"):
+        return r"~/Library/Application Support/Google/Chrome"
+    return "~/.config/google-chrome"
+
+
+def get_llama_server_help() -> str:
+    """Return platform-appropriate help text for starting llama-server."""
+    if IS_WINDOWS:
+        return "C:\\llama.cpp\\build\\bin\\Release\\llama-server.exe --model <gguf> --port 8080"
+    return "/tmp/llama.cpp/build-cpu/bin/llama-server --model <gguf> --port 8080"
+
 
 # Default Prompt Templates used by the agent
 DEFAULT_PROMPTS = {
@@ -267,6 +289,7 @@ AUFGABEN:
 4. Prüfe, ob der Jobtitel gegen die forbidden_titles-Regeln oder das Senioritätslevel des Kandidaten verstösst:
    - Kandidat mit IT-Junior-Level (0-3 Jahre): Blockiere Senior, Middle, Lead, Architect, Principal, Head of, Full Stack Developer, Consultant, Helpdesk.
    - Kandidat mit Handwerk-Expert-Level: Erlaube alle Handwerk-Titel.
+   - Kandidat mit Bildung/Lehre-Seniorität: Erlaube alle Bildungs-Titel (Lehrer, Dozent, Pädagoge etc.).
    - Global blockieren: Projektmanager, Sales, Marketing Manager, HR.
 5. Prüfe auf Duplikate mit bereits beworbenen Stellen.
 6. Prüfe KO-Filter: Unternehmen auf Blacklist, Sicherheitsfreigaben, Spam-Bildungsanbieter.
@@ -332,8 +355,9 @@ def restore_active_configs_from_samples(workspace_dir, config_path, criteria_pat
                 print(f"   {Colors.YELLOW}Warning: Sample file '{sample}' not found. Re-generating fallback '{name}'.{Colors.END}")
                 try:
                     if name == "config.yaml":
-                        default_content = """user_profile:
-  chrome_data_dir: "C:\\\\Users\\\\<Username>\\\\AppData\\\\Local\\\\Google\\\\Chrome\\\\User Data"
+                        chrome_path = get_default_chrome_path()
+                        default_content = f"""user_profile:
+  chrome_data_dir: "{chrome_path}"
   chrome_profile: "Default"
   cv_path: "../documents/Lebenslauf.pdf"
   documents_dir: "../documents"

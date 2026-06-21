@@ -15,8 +15,25 @@ from job_agent.utils import Colors
 BASE_URL = "https://jooble.org/api"
 TIMEOUT = 15
 
-# Env var for the Jooble API key (set JOOBLE_API_KEY in environment)
-API_KEY = os.environ.get("JOOBLE_API_KEY", "")
+# Credentials from config.yaml -> jooble section (no env vars)
+def _get_jooble_key() -> str:
+    try:
+        import yaml
+        config_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "config", "config.yaml",
+        )
+        if os.path.exists(config_path):
+            with open(config_path) as f:
+                config = yaml.safe_load(f) or {}
+            jooble = config.get("jooble", {}) or {}
+            return jooble.get("api_key", "") or ""
+    except Exception:
+        pass
+    return ""
+
+
+API_KEY = _get_jooble_key()
 
 
 def search_jooble(
@@ -37,7 +54,8 @@ def search_jooble(
         List of JobPosting objects.
     """
     if not API_KEY:
-        print(f"{Colors.YELLOW}[Jooble API] No API key set. Set JOOBLE_API_KEY env var. Skipping.{Colors.END}")
+        print(f"{Colors.YELLOW}[Jooble API] No API key set. "
+              f"Add jooble.api_key to config.yaml. Skipping.{Colors.END}")
         return []
 
     # Clamp radius to Jooble's allowed values (0, 4, 8, 16, 26, 40, 80)
@@ -72,7 +90,7 @@ def search_jooble(
     if resp.status_code != 200:
         # 403 often means invalid API key
         if resp.status_code == 403:
-            print(f"{Colors.YELLOW}[Jooble API] HTTP 403 — Invalid API key. Check JOOBLE_API_KEY env var.{Colors.END}")
+            print(f"{Colors.YELLOW}[Jooble API] HTTP 403 — Invalid API key. Check jooble section in config.yaml.{Colors.END}")
         else:
             print(f"{Colors.YELLOW}[Jooble API] HTTP {resp.status_code}: {resp.text[:200]}. Skipping.{Colors.END}")
         return []

@@ -10,6 +10,7 @@ from job_agent.config import load_config
 from job_agent.utils import Colors, clean_and_repair_json, force_ipv4
 from job_agent.openrouter_llm import call_openrouter
 from job_agent.ollama_llm import call_ollama, ollama_available, DEFAULT_MODEL
+from job_agent.llama_server_llm import call_llama_server, llama_server_available
 
 # Global state for API key rotation and fallback models
 API_KEYS = [
@@ -210,9 +211,21 @@ def llm_request_with_fallback(prompt, **kwargs):
     """
     global PRIORITY_LLM, LOCAL_MODEL
 
-    # --- Priority: LOCAL (Ollama) ---
+    # --- Priority: LOCAL (llama-server → Ollama) ---
     if PRIORITY_LLM == "local":
-        print(f"{Colors.CYAN}[LLM] Priority: Local ({LOCAL_MODEL}). Using Ollama...{Colors.END}")
+        # Try compiled llama-server first (direct GGUF, no Ollama dependency)
+        if llama_server_available():
+            print(f"{Colors.CYAN}[LLM] Priority: Local ({LOCAL_MODEL}). Using llama-server (compiled)...{Colors.END}")
+            local_resp = call_llama_server(prompt, model=LOCAL_MODEL)
+            if local_resp:
+                class LocalResponse:
+                    def __init__(self, text):
+                        self.text = text
+                return LocalResponse(local_resp)
+            print(f"{Colors.YELLOW}[LLM] llama-server returned empty response.{Colors.END}")
+
+        # Fall back to Ollama if llama-server is not available
+        print(f"{Colors.CYAN}[LLM] Priority: Local ({LOCAL_MODEL}). Trying Ollama...{Colors.END}")
         if ollama_available(LOCAL_MODEL):
             local_resp = call_ollama(prompt, model=LOCAL_MODEL)
             if local_resp:
@@ -222,7 +235,18 @@ def llm_request_with_fallback(prompt, **kwargs):
                 return LocalResponse(local_resp)
             print(f"{Colors.YELLOW}[LLM] Local LLM returned empty response.{Colors.END}")
         else:
-            print(f"{Colors.YELLOW}[LLM] Ollama not available. Run: bash scripts/setup_local_llm.sh{Colors.END}")
+            print(f"{Colors.YELLOW}[LLM] Neither llama-server nor Ollama is available.{Colors.END}")
+            # Show platform-appropriate help
+            from job_agent.utils import IS_WINDOWS, IS_LINUX
+            if IS_WINDOWS:
+                print(f"{Colors.CYAN}  llama-server: {Colors.END}C:\\llama.cpp\\build\\bin\\Release\\llama-server.exe --model <gguf> --port 8080")
+                print(f"{Colors.CYAN}  Ollama:        {Colors.END}ollama serve (install from https://ollama.com/download){Colors.END}")
+            elif IS_LINUX:
+                print(f"{Colors.CYAN}  llama-server: {Colors.END}/tmp/llama.cpp/build-cpu/bin/llama-server --model <gguf> --port 8080")
+                print(f"{Colors.CYAN}  Ollama:        {Colors.END}ollama serve")
+            else:
+                print(f"{Colors.CYAN}  llama-server: {Colors.END}llama-server --model <gguf> --port 8080")
+                print(f"{Colors.CYAN}  Ollama:        {Colors.END}ollama serve")
 
         # GDPR: Block cloud fallback unless explicitly allowed (read once in init_gemini)
         if not ALLOW_CLOUD_FALLBACK:
@@ -233,7 +257,6 @@ def llm_request_with_fallback(prompt, **kwargs):
                 print(f"{Colors.RED}  Personal data will NOT be sent to OpenRouter/Gemini (US servers).{Colors.END}")
                 print(f"{Colors.RED}  To enable cloud fallback (at your own risk), set in config.yaml:{Colors.END}")
                 print(f"{Colors.RED}    llm.allow_cloud_fallback: true{Colors.END}")
-                print(f"{Colors.YELLOW}  Please start Ollama: ollama serve && ollama pull {LOCAL_MODEL}{Colors.END}")
             return None
 
         # Explicit opt-in: user allowed cloud fallback

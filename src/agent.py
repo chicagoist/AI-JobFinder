@@ -14,6 +14,7 @@ from job_agent.db import init_db, log_application, get_past_rejections
 from job_agent import llm as llm_module
 from job_agent.llm import init_gemini, llm_request_with_fallback
 from job_agent.ollama_llm import ollama_available
+from job_agent.llama_server_llm import llama_server_available
 from job_agent.pipeline import run_pipeline_mode
 # sync_playwright imported locally where needed (PDF rendering)
 
@@ -1063,8 +1064,10 @@ def reset_candidate_data(workspace_dir, config_path, criteria_path, profile_path
 
                 
     # 3. Define default stubs for fallback recreation of .sample files if they are missing
-    default_config = """user_profile:
-  chrome_data_dir: "C:\\\\Users\\\\<Username>\\\\AppData\\\\Local\\\\Google\\\\Chrome\\\\User Data"
+    from job_agent.config import get_default_chrome_path
+    _chrome_path = get_default_chrome_path()
+    default_config = f"""user_profile:
+  chrome_data_dir: "{_chrome_path}"
   chrome_profile: "Default"
   cv_path: "Lebenslauf_UserName.pdf"
   documents_dir: "documents"
@@ -1381,6 +1384,8 @@ def main():
     parser.add_argument("--criteria", type=str, default="config/job_criteria.yaml", help="Path to job criteria config")
     parser.add_argument("--debug", action="store_true", help="Enable debugging mode")
     parser.add_argument("--ignore-ollama", action="store_true", help="Proceed even if Ollama is not running (demo/testing only)")
+    parser.add_argument("--send-email", action="store_true",
+                        help="Generate candidate digest .eml for all pending applications (no auto-send)")
 
     args = parser.parse_args()
 
@@ -1400,7 +1405,8 @@ def main():
 
     # Launch GUI if no CLI mode specified (before loading configs)
     if not any([args.pipeline, args.parse_cv, args.reset_candidate,
-                args.generate_dummy_cv, args.test_score, args.test_anschreiben]):
+                args.generate_dummy_cv, args.test_score, args.test_anschreiben,
+                args.send_email]):
         run_config_gui(config_path, criteria_path, profile_path, prompts_path)
         return
 
@@ -1432,28 +1438,51 @@ def main():
         cv_name = config["user_profile"].get("cv_path", "Lebenslauf_UserName.pdf")
         cv_path = os.path.join(workspace_dir, cv_name)
 
+    if args.pipeline and args.send_email:
+        # Both: run pipeline (already generates digest at end), no redundant call
+        print(f"{Colors.CYAN}--pipeline + --send-email: pipeline digest wird automatisch erstellt.{Colors.END}")
+        run_pipeline_mode(workspace_dir, config, criteria_path, profile_path,
+                          args.search_jobs, args.location, args.radius, args.force_generate,
+                          args.auto_approve, args.ignore_ollama)
+        return
+
+    if args.send_email:
+        from job_agent.pipeline import JobPipeline
+        pipeline = JobPipeline(workspace_dir=workspace_dir, criteria_path=criteria_path, profile_path=profile_path)
+        pipeline.initialize()
+        digest_path = pipeline.generate_pending_digest()
+        if digest_path:
+            print(f"{Colors.GREEN}✅ Candidate digest created: {digest_path}{Colors.END}")
+            print(f"{Colors.YELLOW}📤 Please open the .eml file and send manually.{Colors.END}")
+        else:
+            print(f"{Colors.YELLOW}No pending applications to send.{Colors.END}")
+        return
+
     if args.pipeline:
         run_pipeline_mode(workspace_dir, config, criteria_path, profile_path,
                           args.search_jobs, args.location, args.radius, args.force_generate,
                           args.auto_approve, args.ignore_ollama)
         return
 
-    # --- Guard: Local LLM required but Ollama is not running ---
+    # --- Guard: Local LLM required but neither llama-server nor Ollama is running ---
     # Covers --parse-cv, --test-score, --test-anschreiben (all call LLM)
     if args.parse_cv or args.test_score or args.test_anschreiben:
         init_gemini()  # Load globals from config
         if llm_module.PRIORITY_LLM == "local" and not llm_module.ALLOW_CLOUD_FALLBACK:
-            if not ollama_available(llm_module.LOCAL_MODEL):
+            local_available = llama_server_available() or ollama_available(llm_module.LOCAL_MODEL)
+            if not local_available:
                 if args.ignore_ollama:
-                    print(f"\n{Colors.YELLOW}{Colors.BOLD}⚠ [1mLocal LLM required but Ollama is not running.{Colors.END}")
-                    print(f"{Colors.YELLOW}  Proceeding due to --ignore-ollama flag. Jobs will score 0/10.{Colors.END}")
-                    print(f"{Colors.YELLOW}  Start Ollama for real results: ollama serve{Colors.END}\n")
+                    print(f"\n{Colors.YELLOW}{Colors.BOLD}⚠ [1mLocal LLM required but neither llama-server nor Ollama is running.{Colors.END}")
+                    print(f"{Colors.YELLOW}  Proceeding due to --ignore-ollama flag.{Colors.END}")
+                    print(f"{Colors.YELLOW}  Start: llama-server --model <gguf> --port 8080 OR ollama serve{Colors.END}\n")
                 else:
+                    from job_agent.utils import IS_WINDOWS
+                    ls_path = "/tmp/llama.cpp/build-cpu/bin/llama-server" if not IS_WINDOWS else "C:\\llama.cpp\\build\\bin\\Release\\llama-server.exe"
                     print(f"\n{Colors.RED}{Colors.BOLD}{'='*60}{Colors.END}")
-                    print(f"{Colors.RED}{Colors.BOLD}  ❌ Local LLM required. Start Ollama:{Colors.END}")
-                    print(f"{Colors.CYAN}     ollama serve{Colors.END}")
-                    print(f"{Colors.GREY}     Or if already installed: ollama run {llm_module.LOCAL_MODEL}{Colors.END}")
-                    print(f"{Colors.GREY}     Model needed: {llm_module.LOCAL_MODEL}{Colors.END}")
+                    print(f"{Colors.RED}{Colors.BOLD}  ❌ Local LLM required!{Colors.END}")
+                    print(f"{Colors.CYAN}     llama-server: {ls_path} --model <gguf> --port 8080{Colors.END}")
+                    print(f"{Colors.GREY}     Or if using Ollama: ollama serve{Colors.END}")
+                    print(f"{Colors.GREY}     Model needed (Ollama): {llm_module.LOCAL_MODEL}{Colors.END}")
                     print(f"{Colors.RED}{Colors.BOLD}{'='*60}{Colors.END}\n")
                     return
 

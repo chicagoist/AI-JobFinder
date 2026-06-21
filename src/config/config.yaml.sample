@@ -31,6 +31,10 @@ smtp:
   port: 587
   username: <YOUR_EMAIL>@gmail.com
 user_profile:
+  # Chrome user data directory — wähle den Pfad für dein Betriebssystem:
+  #   Windows: C:\Users\<Username>\AppData\Local\Google\Chrome\User Data
+  #   Linux:   ~/.config/google-chrome
+  #   macOS:   ~/Library/Application Support/Google/Chrome
   chrome_data_dir: ~/.config/google-chrome
   chrome_profile: Default
   cv_path: ../documents/Lebenslauf_UserName.pdf

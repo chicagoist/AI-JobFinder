@@ -4,8 +4,51 @@ import re
 import signal
 import socket
 
-# ANSI Escape colors for terminal highlighting
+# ---------------------------------------------------------------------------
+# Platform detection helpers
+# ---------------------------------------------------------------------------
+
+IS_WINDOWS = sys.platform.startswith("win")
+IS_LINUX = sys.platform.startswith("linux")
+IS_MACOS = sys.platform.startswith("darwin")
+
+
+# ---------------------------------------------------------------------------
+# ANSI escape colors with Windows console support
+# ---------------------------------------------------------------------------
+
+def _enable_windows_ansi() -> None:
+    """Enable ANSI escape code support on Windows 10+ terminals.
+
+    Uses SetConsoleMode via ctypes to enable ENABLE_VIRTUAL_TERMINAL_PROCESSING.
+    Falls back silently if ctypes is not available or the call fails.
+    """
+    try:
+        import ctypes  # type: ignore[import-untyped]
+        from ctypes import wintypes  # type: ignore[import-untyped]
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        STD_OUTPUT_HANDLE = wintypes.DWORD(-11).value
+        ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
+        handle = kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
+        INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+        if handle and handle != INVALID_HANDLE_VALUE:
+            mode = ctypes.c_uint32()
+            if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+                kernel32.SetConsoleMode(handle, mode.value | ENABLE_VIRTUAL_TERMINAL_PROCESSING)
+    except Exception:
+        pass
+
+
+if IS_WINDOWS:
+    _enable_windows_ansi()
+
+
 class Colors:
+    """ANSI escape codes for terminal output.
+
+    On Windows 10+ the _enable_windows_ansi() call above enables
+    virtual terminal processing so \\033 sequences work in cmd/PowerShell.
+    """
     BLUE = '\033[94m'
     CYAN = '\033[96m'
     GREEN = '\033[92m'
@@ -19,17 +62,34 @@ class Colors:
     END = '\033[0m'
     RESET = '\033[0m'
 
-# Handle Ctrl+C gracefully at the OS level to prevent traceback prints
+
+# ---------------------------------------------------------------------------
+# Signal handling (Ctrl+C) — platform-safe
+# ---------------------------------------------------------------------------
+
 def handle_sigint(sig, frame):
+    """Handle Ctrl+C gracefully — no traceback dump."""
     raise KeyboardInterrupt
 
-signal.signal(signal.SIGINT, handle_sigint)
+# Register SIGINT handler (works on both Unix and Windows Python 3.8+)
+try:
+    signal.signal(signal.SIGINT, handle_sigint)
+except (AttributeError, ValueError, OSError):
+    # Some platforms (e.g. Windows build tools, some embedded Python) may not
+    # support signal.SIGINT. Ignore and proceed without custom handler.
+    pass
 
-# Ensure UTF-8 encoding on Windows terminal for German umlauts
-if sys.platform.startswith("win"):
+
+# ---------------------------------------------------------------------------
+# UTF-8 encoding on Windows terminal for German umlauts
+# ---------------------------------------------------------------------------
+
+if IS_WINDOWS:
     try:
-        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8', errors='replace')  # type: ignore[union-attr]
+        if hasattr(sys.stderr, 'reconfigure'):
+            sys.stderr.reconfigure(encoding='utf-8', errors='replace')  # type: ignore[union-attr]
     except Exception:
         pass
 
@@ -160,9 +220,17 @@ def force_ipv4():
 
     This patch strips IPv6 results entirely when the caller does not explicitly
     request IPv6 (family=0/AF_UNSPEC), ensuring only IPv4 is used.
+
+    **Cross-platform:** Only applies on Linux where IPv6 is commonly broken.
+    On Windows and macOS the original getaddrinfo is left untouched.
     """
     global _IPV4_FIX_APPLIED
     if _IPV4_FIX_APPLIED:
+        return
+
+    # Only apply IPv4 fix on Linux (broken IPv6 is a Linux-specific problem)
+    if not IS_LINUX:
+        _IPV4_FIX_APPLIED = True
         return
 
     def _patched_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
@@ -208,3 +276,113 @@ def clean_ansi_escape_codes(text):
     return ansi_escape.sub('', text)
 
 
+def compact_profile_for_llm(profile: dict) -> str:
+    """Convert candidate profile dict to a compact Markdown string for LLM prompts.
+
+    Drops non-essential fields (hr_assessment, phone, address, curriculum details)
+    and uses Markdown bullet points instead of JSON — much more token-efficient
+    for local LLMs running on slow CPUs.
+
+    Typical output: ~2000 chars vs ~6000 chars for indented JSON (65% reduction).
+    """
+    lines = []
+
+    # Personal info — keep essentials only
+    pi = profile.get("personal_info", {})
+    raw_name = pi.get("name", "")
+    first = pi.get("first_name", "")
+    last = pi.get("last_name", "")
+    if first and last:
+        name = f"{first} {last}"
+    elif raw_name:
+        name = raw_name
+    else:
+        name = "Kandidat"
+    lines.append(f"Name: {name}")
+
+    email = pi.get("email", "")
+    if email:
+        lines.append(f"E-Mail: {email}")
+
+    city = pi.get("city", "") or pi.get("location", "")
+    if city:
+        lines.append(f"Standort: {city}")
+
+    avail = pi.get("availability", "")
+    if avail:
+        lines.append(f"Verf\u00fcgbarkeit: {avail}")
+
+    # Languages
+    langs = profile.get("languages", {})
+    if langs:
+        lang_str = ", ".join(f"{k} {v}" for k, v in langs.items())
+        lines.append(f"Sprachen: {lang_str}")
+
+    # Skills — keep all, comma-separated
+    skills = profile.get("skills", [])
+    if skills:
+        lines.append(f"F\u00e4higkeiten: {', '.join(str(s) for s in skills)}")
+
+    # Experience — title + company + years only (no duties)
+    exp = profile.get("experience", [])
+    if exp:
+        lines.append("Berufserfahrung:")
+        for e in exp[:8]:
+            if isinstance(e, dict):
+                title = e.get("title", e.get("position", ""))
+                company = e.get("company", "")
+                years = e.get("years", e.get("duration", ""))
+                entry = f"  - {title}" if title else "  -"
+                if company:
+                    entry += f" bei {company}"
+                if years:
+                    entry += f" ({years})"
+                lines.append(entry)
+            else:
+                lines.append(f"  - {str(e)}")
+
+    # Education — degree + field + institution only (skip curriculum details)
+    edu = profile.get("education", [])
+    if edu:
+        lines.append("Ausbildung:")
+        for e in edu[:5]:
+            if isinstance(e, dict):
+                degree = e.get("degree", "")
+                field = e.get("field", e.get("field_of_study", ""))
+                inst = e.get("institution", "")
+                year = e.get("year", e.get("graduation_year", ""))
+                entry = "  -"
+                if degree:
+                    entry += f" {degree}"
+                if field:
+                    entry += f" in {field}"
+                if inst:
+                    entry += f", {inst}"
+                if year:
+                    entry += f" ({year})"
+                lines.append(entry)
+            else:
+                lines.append(f"  - {str(e)}")
+
+    # Certifications — names only
+    certs = profile.get("certifications", [])
+    if certs:
+        cert_names = []
+        for c in certs[:10]:
+            if isinstance(c, dict):
+                cert_names.append(c.get("name", str(c)))
+            else:
+                cert_names.append(str(c))
+        lines.append(f"Zertifikate: {', '.join(cert_names)}")
+
+    # Seniority level (important for forbidden title matching)
+    seniority = profile.get("seniority_level", "")
+    if seniority:
+        lines.append(f"Seniorit\u00e4t: {seniority}")
+
+    # Experience years
+    exp_years = profile.get("experience_years", 0)
+    if exp_years:
+        lines.append(f"Berufserfahrung: {exp_years} Jahre")
+
+    return "\n".join(lines)

@@ -17,9 +17,25 @@ from job_agent.utils import Colors
 BASE_URL = "https://api.adzuna.com/v1/api/jobs/de/search"
 TIMEOUT = 15
 
-# Env vars for Adzuna credentials (set ADZUNA_APP_ID and ADZUNA_APP_KEY)
-ADZUNA_APP_ID = os.environ.get("ADZUNA_APP_ID", "")
-ADZUNA_APP_KEY = os.environ.get("ADZUNA_APP_KEY", "")
+# Credentials from config.yaml -> adzuna section (no env vars)
+def _get_adzuna_credentials() -> tuple[str, str]:
+    try:
+        import yaml
+        config_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "config", "config.yaml",
+        )
+        if os.path.exists(config_path):
+            with open(config_path) as f:
+                config = yaml.safe_load(f) or {}
+            adzuna = config.get("adzuna", {}) or {}
+            return adzuna.get("app_id", "") or "", adzuna.get("app_key", "") or ""
+    except Exception:
+        pass
+    return "", ""
+
+
+ADZUNA_APP_ID, ADZUNA_APP_KEY = _get_adzuna_credentials()
 
 
 def search_adzuna(
@@ -41,26 +57,25 @@ def search_adzuna(
     """
     if not ADZUNA_APP_ID or not ADZUNA_APP_KEY:
         print(f"{Colors.YELLOW}[Adzuna API] No credentials set. "
-              f"Set ADZUNA_APP_ID and ADZUNA_APP_KEY env vars. Skipping.{Colors.END}")
+              f"Add adzuna.app_id and adzuna.app_key to config.yaml. Skipping.{Colors.END}")
         return []
 
     all_jobs: list[JobPosting] = []
     results_per_page = min(max_results, 50)
 
-    params = {
-        "app_id": ADZUNA_APP_ID,
-        "app_key": ADZUNA_APP_KEY,
-        "what": query,
-        "where": f"{location}, Germany",
-        "distance_radius": radius,
-        "distance_unit": "km",
-        "results_per_page": results_per_page,
-        "max_days_old": 60,  # Only jobs from last 60 days
-        "content_type": "application/json",
+    url = (f"{BASE_URL}/1?app_id={ADZUNA_APP_ID}"
+           f"&app_key={ADZUNA_APP_KEY}"
+           f"&what={requests.utils.quote(query)}"
+           f"&where={requests.utils.quote(location)}"
+           f"&results_per_page={results_per_page}")
+
+    headers = {
+        "User-Agent": "curl/7.88.1",
+        "Accept": "*/*",
     }
 
     try:
-        resp = requests.get(f"{BASE_URL}/1", params=params, timeout=TIMEOUT)
+        resp = requests.get(url, headers=headers, timeout=TIMEOUT)
     except requests.Timeout:
         print(f"{Colors.YELLOW}[Adzuna API] Timeout. Skipping.{Colors.END}")
         return []
@@ -74,7 +89,7 @@ def search_adzuna(
     if resp.status_code != 200:
         if resp.status_code == 401:
             print(f"{Colors.YELLOW}[Adzuna API] HTTP 401 — Invalid credentials. "
-                  f"Check ADZUNA_APP_ID and ADZUNA_APP_KEY env vars.{Colors.END}")
+                  f"Check adzuna section in config.yaml.{Colors.END}")
         else:
             print(f"{Colors.YELLOW}[Adzuna API] HTTP {resp.status_code}: {resp.text[:200]}. Skipping.{Colors.END}")
         return []
