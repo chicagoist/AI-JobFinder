@@ -137,7 +137,6 @@ def generate_email_draft(
                     f.write(f"  - {os.path.basename(p)}\n")
             f.write(f"\n---\n\n{body_text}\n")
         print(f"{Colors.GREEN}📄 Text-Entwurf gespeichert: {txt_path}{Colors.END}")
-        print(f"{Colors.YELLOW}⚠️  Bitte öffnen und manuell versenden (kein automatischer Versand).{Colors.END}")
 
         return eml_path
     except Exception as e:
@@ -235,7 +234,6 @@ def generate_candidate_digest_draft(
         with open(txt_path, "w", encoding="utf-8") as f:
             f.write(digest_text)
         print(f"{Colors.GREEN}📄 Text-Übersicht gespeichert: {txt_path}{Colors.END}")
-        print(f"{Colors.YELLOW}⚠️  Bitte öffnen und manuell versenden.{Colors.END}")
 
         # Mark all as email_sent=1 (draft generated)
         for row in rows:

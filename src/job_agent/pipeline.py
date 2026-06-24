@@ -455,7 +455,7 @@ class JobPipeline:
         output_dir = os.path.join(self.workspace_dir, "output")
         os.makedirs(output_dir, exist_ok=True)
 
-        safe_name = "".join(c for c in company_name if c.isalnum() or c in (" ", "_")).strip().replace(" ", "_")
+        safe_name = "".join(c for c in (company_name or "Unbekannt") if c.isalnum() or c in (" ", "_")).strip().replace(" ", "_")
         pdf_path = os.path.join(output_dir, f"Anschreiben_{safe_name}.pdf")
 
         # Build sender info from profile
@@ -855,7 +855,7 @@ class JobPipeline:
     # -----------------------------------------------------------------------
 
     def index_documents(self) -> None:
-        """Scan documents/ and output/ directories and index PDFs into the DB."""
+        """Scan documents/ directory and index PDFs into the DB."""
         import glob
         import fitz
 
@@ -864,8 +864,7 @@ class JobPipeline:
 
         project_root = os.path.dirname(self.workspace_dir)
         doc_pattern = os.path.join(project_root, "documents", "*.pdf")
-        out_pattern = os.path.join(self.workspace_dir, "output", "*.pdf")
-        pdf_files = set(glob.glob(doc_pattern) + glob.glob(out_pattern))
+        pdf_files = set(glob.glob(doc_pattern))
 
         cursor = self.conn.cursor()
         cursor.execute("SELECT file_path, file_size, mtime, classification FROM candidate_files")
