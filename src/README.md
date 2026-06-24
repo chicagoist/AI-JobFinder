@@ -222,23 +222,20 @@ Durchsucht die Datenbank nach Bewerbungen mit `email_sent = 0`, packt sie in ZIP
 
 ## ✅ Argument-Kompatibilitätsmatrix
 
-| Flag | `--generate-dummy-cv` | `--parse-cv` | `--test-score` | `--test-anschreiben` | `--url` | `--interactive` | `--search-jobs` | `--reset-candidate` | `--send-email` |
-|---|---|---|---|---|---|---|---|---|---|
-| **`--generate-dummy-cv`** | ✅ Alleinstehend | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **`--parse-cv`** | ❌ | ✅ Alleinstehend | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **`--test-score`** | ❌ | ❌ | ✅ Alleinstehend | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **`--test-anschreiben`** | ❌ | ❌ | ❌ | ✅ Alleinstehend | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **`--url`** | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **`--interactive`** | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| **`--search-jobs`** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ + `--location`, `--radius` | ❌ | ❌ |
-| **`--reset-candidate`** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ Alleinstehend | ❌ |
-| **`--send-email`** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ Alleinstehend |
-| **`--headless`** | ❌ | ❌ | ❌ | ❌ | ⚠️ | ⚠️ | ✅ Empfohlen | ❌ | ❌ |
-| **`--auto-approve`** | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ Empfohlen | ❌ | ❌ |
-| **`--config`** | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **`--profile`** | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **`--criteria`** | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **`--chrome-data-dir`** | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Flag | `--parse-cv` | `--test-score` | `--test-anschreiben` | `--search-jobs` | `--pipeline` | `--send-email` | `--reset-candidate` | `--no-cloud-llm` | `--cloud-only` |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **`--parse-cv`** | ✅ Alleinstehend | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
+| **`--test-score`** | ❌ | ✅ Alleinstehend | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
+| **`--test-anschreiben`** | ❌ | ❌ | ✅ Alleinstehend | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
+| **`--search-jobs`** | ❌ | ❌ | ❌ | ❌ | ✅ + `--pipeline` | ❌ | ❌ | ✅ | ✅ |
+| **`--pipeline`** | ❌ | ❌ | ❌ | ✅ + `--search-jobs` | ✅ | ✅ | ❌ | ✅ | ✅ |
+| **`--send-email`** | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ Alleinstehend | ❌ | ✅ | ✅ |
+| **`--reset-candidate`** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ Alleinstehend | ❌ | ❌ |
+| **`--no-cloud-llm`** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ Alleinstehend | ❌ |
+| **`--cloud-only`** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ Alleinstehend |
+| **`--config`** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **`--profile`** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **`--criteria`** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 **Legende:**
 - ✅ = Kombination möglich oder empfohlen
@@ -246,12 +243,11 @@ Durchsucht die Datenbank nach Bewerbungen mit `email_sent = 0`, packt sie in ZIP
 - ⚠️ = Möglich, aber nicht empfohlen (ohne `--auto-approve` wird auf Benutzereingabe gewartet)
 
 **Wichtige Kombinationsregeln:**
-1. **`--headless` aktiviert automatisch `--auto-approve`** — da kein Browserfenster sichtbar ist.
-2. **`--send-email` aktiviert automatisch `--auto-approve`** — um alle ausstehenden Bewerbungen zu verarbeiten.
-3. **`--url` kann mit `--config`/`--profile`/`--criteria`** kombiniert werden, um andere Konfigurationen zu laden.
-4. **`--search-jobs` kann mit `--location` und `--radius`** kombiniert werden.
-5. **Test-Flags (`--test-score`, `--test-anschreiben`) laufen alleinstehend** — sie starten keinen Browser.
-6. **`--reset-candidate` ist ein Reinigungsbefehl** — alle anderen Flags werden ignoriert.
+1. **`--pipeline` + `--search-jobs`** ist der empfohlene GDPR-konforme Modus (offizielle Job-APIs, LLM-Scoring, .eml-Drafts).
+2. **`--no-cloud-llm` und `--cloud-only` schließen sich gegenseitig aus.**
+3. **`--send-email`** sendet per-job SMTP an die Kandidaten-E-Mail (Datenverantwortlicher) — NIEMALS an Dritte.
+4. **Test-Flags (`--test-score`, `--test-anschreiben`) laufen alleinstehend** — sie starten keinen Browser.
+5. **`--reset-candidate` ist ein Reinigungsbefehl** — alle anderen Flags werden ignoriert.
 
 ---
 
@@ -303,26 +299,28 @@ python agent.py --generate-dummy-cv
 ### 4. Erste Bewerbung testen
 
 ```bash
-# Einzelne URL verarbeiten (manuelle Freigabe)
-python agent.py --url "https://de.indeed.com/viewjob?jk=12345"
+# Pipeline-Modus: offizielle Job-APIs, LLM-Scoring, .eml-Drafts (empfohlen)
+python agent.py --pipeline --search-jobs "Fachinformatiker" --location "Frankfurt" --radius 25
 
-# Oder: Vollautomatisch
-python agent.py --url "https://de.indeed.com/viewjob?jk=12345" --headless --auto-approve
+# Mit Cloud-LLM (schneller, aber PII an US-Drittanbieter)
+python agent.py --pipeline --search-jobs "Fachinformatiker" --location "Frankfurt" --radius 25 --cloud-only
+
+# Lokal nur (Ollama/llama-server erforderlich)
+python agent.py --pipeline --search-jobs "Fachinformatiker" --location "Frankfurt" --radius 25 --no-cloud-llm
 ```
 
 ---
 
 ## 💡 Anwendungsbeispiele
 
-### 🔍 Stellen suchen & automatisch bewerben
+### 🔍 Pipeline-Modus (empfohlen — offizielle APIs)
 
 ```bash
-python agent.py --search-jobs "Remote Hybrid" \
+python agent.py --pipeline --search-jobs "Remote Hybrid" \
                 --location "Frankfurt am Main" \
-                --radius 25 \
-                --headless \
-                --auto-approve
+                --radius 25
 ```
+(Erzeugt `.eml`-Drafts in `drafts/`, keine automatischen E-Mails)
 
 ### 📨 Ausstehende Bewerbungen per E-Mail versenden
 

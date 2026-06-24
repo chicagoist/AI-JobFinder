@@ -315,7 +315,7 @@ def compact_profile_for_llm(profile: dict) -> str:
     # Languages
     langs = profile.get("languages", {})
     if langs:
-        lang_str = ", ".join(f"{k} {v}" for k, v in langs.items())
+        lang_str = ", ".join(f"{k} {v}" for k, v in langs.items() if v)
         lines.append(f"Sprachen: {lang_str}")
 
     # Skills — keep all, comma-separated

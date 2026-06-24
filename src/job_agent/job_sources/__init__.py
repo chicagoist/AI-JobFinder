@@ -14,6 +14,7 @@ Usage:
         print(job.title, job.company, job.url)
 """
 
+import re
 from typing import Optional
 from dataclasses import dataclass
 from job_agent.utils import Colors
@@ -30,6 +31,35 @@ class JobPosting:
     source: str  # "bundesagentur" | "arbeitnow" | etc.
     salary: Optional[str] = None
     job_type: Optional[str] = None  # "Vollzeit", "Teilzeit", etc.
+
+
+# Known unreliable location sources — apply client-side text filtering
+_LOCATION_FILTER_SOURCES = {"arbeitnow", "adzuna", "jooble"}
+
+
+def _get_city_names(location: str) -> list[str]:
+    """Extract meaningful city name(s) from a location string.
+    
+    "Hanau, Hessen" → ["hanau"]
+    "Frankfurt am Main" → ["frankfurt"]
+    "63517" (PLZ) → []  (not a city name, skip text filter)
+    """
+    loc = location.strip()
+    if re.match(r"^\d{5}$", loc):
+        return []
+    # Take the first meaningful word before any separator
+    city = re.split(r"[,;/-]", loc)[0].strip().lower()
+    words = city.split()
+    # "Frankfurt am Main" → "frankfurt"
+    return [words[0].rstrip(".")] if words else []
+
+
+def _matches_location(job_location: str, city_parts: list[str]) -> bool:
+    """Check if job location text contains the requested city name."""
+    if not city_parts:
+        return True
+    job_loc_lower = job_location.lower()
+    return any(part in job_loc_lower for part in city_parts)
 
 
 def search_all_sources(
@@ -91,5 +121,17 @@ def search_all_sources(
             print(f"{Colors.YELLOW}[JobSources] Error searching {source_name}: {e}{Colors.END}")
 
     print(f"{Colors.CYAN}[JobSources] Total: {len(all_jobs)} unique jobs from {len(sources)} sources{Colors.END}")
+
+    # Client-side location filter for sources that don't respect location parameter
+    city_parts = _get_city_names(location)
+    if city_parts:
+        before = len(all_jobs)
+        all_jobs = [
+            j for j in all_jobs
+            if j.source not in _LOCATION_FILTER_SOURCES or _matches_location(j.location, city_parts)
+        ]
+        filtered = before - len(all_jobs)
+        if filtered:
+            print(f"{Colors.YELLOW}[JobSources] Filtered out {filtered} jobs outside {location}{Colors.END}")
 
     return all_jobs[:max_results]

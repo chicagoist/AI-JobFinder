@@ -76,8 +76,10 @@ Gib das Ergebnis ausschließlich als valides JSON-Objekt im folgenden Format zur
 {{
   "total_score": 7.5,
   "ko_criterion_triggered": false,
-  "reasoning": "Detaillierte Begründung auf Deutsch, warum dieser Score vergeben wurde..."
-}}""",
+  "reasoning": "Detaillierte Begründung auf Deutsch, warum dieser Score vergeben wurde...",
+  "relevant_documents": ["Lebenslauf", "Zertifikat", "Diplom"]
+}}
+Die "relevant_documents"-Liste enthält die Klassifikationen der Kandidaten-Dokumente, die für die Bewertung relevant waren. Immer "Lebenslauf" einschließen, wenn das Profil verwendet wurde. Leere Liste, wenn keins relevant.""",
     "scoring_prompt_IT": """Du bist ein erfahrener IT-Recruiter in Deutschland. Vergleiche das Kandidatenprofil mit der Stellenbeschreibung (Job Description).
 
 Kandidatenprofil (JSON):
@@ -114,8 +116,10 @@ Gib das Ergebnis ausschließlich als valides JSON-Objekt im folgenden Format zur
 {{
   "total_score": 8.5,
   "ko_criterion_triggered": false,
-  "reasoning": "Detaillierte Begründung auf Deutsch, warum dieser Score vergeben wurde..."
-}}""",
+  "reasoning": "Detaillierte Begründung auf Deutsch, warum dieser Score vergeben wurde...",
+  "relevant_documents": ["Lebenslauf", "Zertifikat"]
+}}
+Die "relevant_documents"-Liste enthält die Klassifikationen der Kandidaten-Dokumente, die für die Bewertung relevant waren. Immer "Lebenslauf" einschließen, wenn das Profil verwendet wurde. Leere Liste, wenn keins relevant.""",
     "scoring_prompt": """Vergleiche das Kandidatenprofil mit der Stellenbeschreibung (Job Description).
 
 Kandidatenprofil (JSON):
@@ -140,8 +144,10 @@ Gib das Ergebnis als JSON zurück:
 {{
   "total_score": 0.0,
   "ko_criterion_triggered": false,
-  "reasoning": "Begründung"
-}}""",
+  "reasoning": "Begründung",
+  "relevant_documents": ["Lebenslauf"]
+}}
+Die "relevant_documents"-Liste enthält die Klassifikationen der Kandidaten-Dokumente, die für die Bewertung relevant waren. Immer "Lebenslauf" einschließen, wenn das Profil verwendet wurde. Leere Liste, wenn keins relevant.""",
     "cover_letter_prompt": """Erstelle ein professionelles Anschreiben auf Deutsch basierend auf dem Kandidatenprofil und der Stellenbeschreibung.
 
 Kandidatenprofil:
@@ -286,12 +292,13 @@ AUFGABEN:
 1. Prüfe, ob es sich um eine gültige Stellenanzeige handelt (kein Dead-Link, keine Suchseite, keine 404-Seite).
 2. Extrahiere Firmenname und Jobtitel aus Titel + Text. Bereinige den Firmennamen (entferne GmbH, AG, SE, KG, e.V. etc.).
 3. Bestimme die Branche (IT, Handwerk, Allgemein, Bildung/Lehre) anhand des Textes UND des Kandidatenprofils.
-4. Prüfe, ob der Jobtitel gegen die forbidden_titles-Regeln oder das Senioritätslevel des Kandidaten verstösst:
-   - Kandidat mit IT-Junior-Level (0-3 Jahre): Blockiere Senior, Middle, Lead, Architect, Principal, Head of, Full Stack Developer, Consultant, Helpdesk.
-   - Kandidat mit Handwerk-Expert-Level: Erlaube alle Handwerk-Titel.
-   - Kandidat mit Bildung/Lehre-Seniorität: Erlaube alle Bildungs-Titel (Lehrer, Dozent, Pädagoge etc.).
-   - Global blockieren: Projektmanager, Sales, Marketing Manager, HR.
-5. Prüfe auf Duplikate mit bereits beworbenen Stellen.
+    4. Prüfe, ob der Jobtitel gegen die forbidden_titles-Regeln verstösst.
+       WICHTIG: Die Berufserfahrung des Kandidaten (auch 20+ Jahre) darf NIEMALS zur Ablehnung einer Stelle führen.
+       Der Kandidat kann sich auf JEDES Stellenlevel bewerben (Junior, Berufseinsteiger, Senior, Lead etc.)
+       unabhängig von seiner Erfahrung. Blockiere NUR explizit verbotene Titel.
+       - Kandidat mit IT-Junior-Level (0-3 Jahre): Blockiere Senior, Middle, Lead, Architect, Principal, Head of, Full Stack Developer, Consultant, Helpdesk NICHT aufgrund der Erfahrung.
+       - Global blockieren: Projektmanager, Sales, Marketing Manager, HR.
+    5. Prüfe auf Duplikate mit bereits beworbenen Stellen.
 6. Prüfe KO-Filter: Unternehmen auf Blacklist, Sicherheitsfreigaben, Spam-Bildungsanbieter.
 
 Antworte NUR mit diesem JSON-Objekt (kein Markdown):
@@ -379,6 +386,11 @@ gemini:
     - "<YOUR_GEMINI_API_KEY_2>"
     - "<YOUR_GEMINI_API_KEY_3>"
     - "<YOUR_GEMINI_API_KEY_4>"
+llm:
+  priority: "local"
+    local_model: "llama3.2:3b-hr-assistant"
+  allow_cloud_fallback: false
+  timeout: 600
 smtp:
   host: "smtp.gmail.com"
   port: 587

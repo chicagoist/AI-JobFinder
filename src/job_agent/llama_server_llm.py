@@ -21,7 +21,7 @@ from typing import Optional
 from job_agent.utils import Colors, IS_WINDOWS
 
 LLAMA_SERVER_BASE_URL = "http://localhost:8080"
-TIMEOUT_SECONDS = 180
+TIMEOUT_SECONDS = 600           # Default 600s, overridable via config.yaml llm.timeout
 
 # Platform-appropriate default paths for the llama-server binary
 def _default_llama_server_path() -> str:

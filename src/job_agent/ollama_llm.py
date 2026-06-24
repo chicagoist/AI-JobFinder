@@ -16,10 +16,10 @@ from typing import Optional
 from job_agent.utils import Colors, IS_WINDOWS, IS_LINUX
 
 OLLAMA_BASE_URL = "http://localhost:11434"
-DEFAULT_MODEL = "llama3.2:1b"  # ~1.3GB, fast on CPU (~25s/intake)
-TIMEOUT_SECONDS = 150           # Balanced: gives local LLM a chance before cloud fallback
+DEFAULT_MODEL = "llama3.2:3b-hr-assistant"  # ~2GB, good quality for scoring/cover letters
+TIMEOUT_SECONDS = 600          # Default 600s, overridable via config.yaml llm.timeout
 OLLAMA_NUM_THREAD = 2           # Conservative: safe on most CPUs
-OLLAMA_NUM_CTX = 3072           # Reduced from 4096: faster prompt eval, still fits intake prompts
+OLLAMA_NUM_CTX = 8192           # Sufficient for full CV + prompts
 
 
 def call_ollama(

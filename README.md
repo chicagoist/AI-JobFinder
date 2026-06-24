@@ -588,10 +588,10 @@ Customise prompts for:
 
 ```powershell
 python agent.py [--search-jobs QUERY] [--location CITY] [--radius KM]
-                [--url URL] [--interactive] [--headless] [--auto-approve]
-                [--send-email] [--parse-cv] [--test-score FILE]
+                [--pipeline] [--send-email] [--parse-cv] [--test-score FILE]
                 [--test-anschreiben COMPANY FILE] [--generate-dummy-cv]
-                [--reset-candidate]
+                [--reset-candidate] [--no-cloud-llm] [--cloud-only]
+                [--ignore-ollama] [--gui]
 ```
 
 ### Argument Reference
@@ -678,15 +678,47 @@ Automatically logs all applications without waiting for user confirmation.
 
 #### `--send-email`
 
-Sends all pending application emails to the candidate.
+Sends all pending application emails to the candidate via SMTP (per-job) and generates a digest `.eml` draft.
 
 | Aspect | Detail |
 |--------|--------|
 | **Syntax** | `--send-email` (standalone) or with other flags |
-| **Works with** | `--search-jobs`, `--url`, `--interactive`, `--auto-approve` |
+| **Works with** | `--pipeline`, `--search-jobs` |
 | **Conflicts with** | `--parse-cv`, `--test-score`, `--test-anschreiben`, `--generate-dummy-cv`, `--reset-candidate` |
-| **Behaviour** | Queries `applied_jobs` for records with `email_sent = 0`, builds ZIP packages, connects SMTP once, sends all pending emails in a single session. When used standalone (without `--url`/`--interactive`/`--search-jobs`), the agent does NOT start Playwright. |
-| **Note** | Anschreiben PDFs are included in the ZIP only if they exist on disk (generated during a previous pipeline run). |
+| **Behaviour** | Sends per-job SMTP to candidate's own email (GDPR Art. 6(1)(f) legitimate interest). Also generates digest `.eml` draft for backup. When used standalone (without `--pipeline`), iterates pending DB jobs. |
+| **Note** | No SMTP to recruiters — only `.eml` drafts for manual forwarding. |
+
+#### `--no-cloud-llm`
+
+Forbids all remote LLM calls — uses local Ollama/llama-server only.
+
+| Aspect | Detail |
+|--------|--------|
+| **Syntax** | `--no-cloud-llm` |
+| **Works with** | All flags |
+| **Conflicts with** | `--cloud-only` |
+| **Behaviour** | Sets `llm.NO_CLOUD_LLM = True` at runtime, overriding config. With `llm.priority: local` this is the default; the flag is an extra safety lock. |
+
+#### `--cloud-only`
+
+Skips local LLM entirely — uses OpenRouter → Gemini only.
+
+| Aspect | Detail |
+|--------|--------|
+| **Syntax** | `--cloud-only` |
+| **Works with** | All flags |
+| **Conflicts with** | `--no-cloud-llm` |
+| **Behaviour** | Sets `llm.CLOUD_ONLY = True` at runtime. Useful when local models are too slow for testing. With this flag, `llama3.2:3b-hr-assistant` is never used. |
+
+#### `--ignore-ollama`
+
+Proceed even if Ollama/llama-server is not running (demo/testing only).
+
+| Aspect | Detail |
+|--------|--------|
+| **Syntax** | `--ignore-ollama` |
+| **Works with** | All flags |
+| **Behaviour** | Skips the local LLM availability check. LLM calls will fail at call time if no local model is running. |
 
 #### `--parse-cv`
 

@@ -74,7 +74,7 @@ def extract_contact_info(job_text: str) -> dict | None:
 def personalize_anschreiben(text: str, recruiter_name: str) -> str:
     if not recruiter_name:
         return text
-    name = recruiter_name.strip().split('\n')[0].strip()
+    name = recruiter_name.strip().splitlines()[0].strip()
     if not name:
         return text
     name_lower = name.lower()

@@ -97,7 +97,7 @@ def generate_email_draft(
     if is_candidate_copy:
         recruiter = contact.get("recruiter_name")
         if recruiter:
-            recruiter = recruiter.split("\n")[0].strip()
+            recruiter = recruiter.splitlines()[0].strip()
         meta = f"[KOPIE / COPY]\n\nBewerbung wurde von Ihrem JobAgent erstellt:\n"
         meta += f"  • Unternehmen: {clean_company_name}\n"
         meta += f"  • Position:    {clean_job_title}\n"

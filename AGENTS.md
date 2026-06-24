@@ -10,16 +10,22 @@ Python CLI tool that automates German job applications: searches job APIs (Bunde
 
 This project must NEVER violate EU/German law. The following rules are NON-NEGOTIABLE:
 
-### 1. No Automatic Email Sending
-- ❌ `send_direct_email()` via SMTP is FORBIDDEN
-- ✅ Always generate `.eml` draft files instead — user sends manually
-- ❌ `--send-email` batch SMTP sending is FORBIDDEN
-- ✅ Generate email digest drafts instead
+### 1. SMTP — Candidate Self-Email Only
+- ✅ SMTP sending to candidate's OWN email address (data subject) IS ALLOWED
+  - `send_candidate_email()` sends per-job application data to the user who runs the tool
+  - The candidate is the data subject — GDPR Art. 6(1)(f) legitimate interest
+- ❌ SMTP sending to RECRUITERS/EMPLOYERS is FORBIDDEN
+  - `send_direct_email()` / any third-party SMTP auto-send is prohibited
+  - `.eml` draft files for manually forwarding to recruiters are fine
+- ✅ `--send-email` flag: sends per-job SMTP to candidate + generates digest `.eml` for backup
+- ✅ Standalone `--send-email` (without `--pipeline`): iterates pending DB jobs and sends per-job SMTP
 
 ### 2. No Cloud LLM for PII Processing
 - ❌ Google Gemini sending candidate PII to US servers is FORBIDDEN
 - ✅ Default LLM must be LOCAL (Ollama: Qwen/Llama/Mistral)
 - ✅ Cloud LLM (Gemini, OpenRouter) is OPTIONAL fallback only with explicit user consent
+- ✅ `--no-cloud-llm` flag: forcibly blocks ALL remote LLM calls at runtime, overriding config
+- ✅ `config.yaml` → `llm.priority: local` + `llm.allow_cloud_fallback: false` for permanent block
 
 ### 3. No Session-Based Scraping
 - ❌ Web scraping with logged-in browser sessions (persistent Chrome profiles) is FORBIDDEN
@@ -40,19 +46,20 @@ This project must NEVER violate EU/German law. The following rules are NON-NEGOT
 Instead of SMTP sending, generate `.eml` draft files:
 
 ### 1. Candidate Email Draft
-- **Body:** Full terminal output for that specific vacancy (cleaned of ANSI codes). The complete `TeeStdout` log captured during `process_job_url`.
+- **Body:** Metadata prefix (company, job title, job URL) + full terminal output for that specific vacancy (cleaned of ANSI codes). The URL MUST be included so the candidate can review the original posting.
 - **Attachments (direct PDFs, not ZIP):**
   - `Anschreiben_<Company>.pdf` — the generated cover letter PDF
   - `Lebenslauf.pdf` — newest CV from `candidate_files` table (classification `Lebenslauf`, ordered by `mtime DESC LIMIT 1`)
-  - **All** Zertifikat / Diplom / Zeugnis / Arbeitszeugnis PDFs from `candidate_files` table — unconditionally.
+  - **Only** Zertifikat / Diplom / Zeugnis / Arbeitszeugnis PDFs whose `classification` is in the LLM's `relevant_documents` response. NOT all certs unconditionally. If `relevant_documents` is empty or missing, attach all certs (backward compat).
 
 ### 2. Recruiter Email Draft
 - **Body:** The full Anschreiben (cover letter) text — including Betreffzeile, Anrede, body, and Grußformel.
 - **Attachments:** Same as candidate draft — `Anschreiben_<Company>.pdf` + `Lebenslauf.pdf` + all Zertifikat/Diplom/Zeugnis/Arbeitszeugnis PDFs.
 
 ### Implementation
-- **Candidate path:** `email_draft_generator.py` → `generate_email_draft()` — body = `clean_ansi_escape_codes(terminal_output)`, attachments from `candidate_files`.
-- **Recruiter path:** `email_draft_generator.py` → `generate_email_draft()` — body = `anschreiben_text`, same attachments.
+- **Candidate path:** `email_draft_generator.py` → `generate_email_draft()` — body = metadata prefix (company, title, URL) + `clean_ansi_escape_codes(terminal_output)`, attachments from `candidate_files`.
+- **Recruiter path:** `email_draft_generator.py` → `generate_email_draft()` — body = `anschreiben_text` (DIN 5008 full text with header), same attachments.
+- **SMTP path:** `email_sender.py` → `send_candidate_email()` — body = metadata prefix (company, title, URL) + `clean_ansi_escape_codes(terminal_output)`, same attachments.
 
 **NEVER replace draft generation with SMTP sending.** This is the core legal protection.
 
@@ -169,6 +176,9 @@ bash src/check_types.sh
 # Skip direct email sending (testing only, used with --url or --search-jobs)
 python src/agent.py --url "https://de.linkedin.com/jobs/view/..." --no-email
 
+# Block cloud LLM (local only — fails if Ollama/llama-server unavailable)
+python src/agent.py --search-jobs "Remote" --location "Berlin" --no-cloud-llm
+
 # Override Chrome user data directory
 python src/agent.py --search-jobs "Remote" --location "Berlin" --chrome-data-dir "/path/to/chrome"
 
@@ -238,3 +248,50 @@ On every startup, `index_candidate_files()` in `agent.py`:
 7. **GUI no longer auto-closes**: Config GUI stays open until user clicks Save or Cancel.
 8. **PLZ location detection**: `--location "63517"` → Indeed uses URL-encoded `l=63517`, LinkedIn detects 5-digit PLZ via `re.match(r"\d{5}", location)` and appends `", Germany"` for geocoding.
 9. **Output readability**: All labels use dimmed `Colors.GREY` with 2-space indent. Dividers use `Colors.GREY` instead of `Colors.CYAN`.
+## Hard Requirements (from session — DO NOT VIOLATE)
+
+### 1. Seniority Level — Never Block Applications
+- ❌ High experience years (20+) must NEVER prevent applying to ANY job.
+- ❌ LLM prompt must NOT use seniority level to block jobs.
+- ✅ Candidate can apply to ALL job levels regardless of experience.
+- ✅ Only explicitly forbidden titles are blocked — by title match, NOT by seniority.
+
+### 2. PDF to LLM — Text Only, Never Binary
+- ✅ Only extracted TEXT from PDF (via fitz.get_text()) is sent to LLM — never binary PDF.
+- ✅ All PDF processing (CV, certs, diplomas) uses `fitz` (PyMuPDF) to extract text first.
+- ❌ Sending raw binary PDF content to any LLM is FORBIDDEN.
+
+### 3. Local Model — llama3.2:3b-hr-assistant (REQUIRED)
+- ✅ Default local model MUST be `llama3.2:3b-hr-assistant` for ALL LLM operations (CV parsing, scoring, cover letters).
+- ✅ This model provides sufficient quality for German HR text tasks (~2GB).
+- ✅ Set globally: `ollama_llm.py:DEFAULT_MODEL`, `config.yaml:llm.local_model`, `config.py:DEFAULT_PROMPTS`.
+- ✅ CV parsing and all other LLM calls use `call_ollama(model=DEFAULT_MODEL)`.
+- ✅ Only extracted TEXT from PDF (via fitz.get_text()) is sent to LLM — never binary PDF.
+
+### 3. PDF Indexing — Only on Changes, Only in documents/
+- ✅ PDFs analyzed via LLM ONLY on first run or when files change (mtime + file size).
+- ✅ Only scans `documents/*.pdf` — NEVER scans `output/` (generated cover letters).
+- ✅ candidate_files DB table tracks file_path, file_size, mtime, classification, parsed_json.
+- ❌ Never re-parse unchanged PDFs.
+- ❌ Never scan or parse files from `output/` directory.
+
+### 4. Intake Prompt — No Seniority Filtering
+- The job_intake_prompt must state: "Die Berufserfahrung (auch 20+ Jahre) darf NIEMALS zur Ablehnung führen."
+- "Der Kandidat kann sich auf JEDES Stellenlevel bewerben unabhängig von seiner Erfahrung."
+
+### 5. Email Mode Messages
+- --send-email: Show "Emails sent to candidate via SMTP."
+- Without: Show "Please open .eml files manually to send (GDPR compliance)."
+
+### 6. --cloud-only Flag
+- `--cloud-only` skips local LLM entirely and uses only OpenRouter → Gemini.
+- Equivalent to setting priority: openrouter + allow_cloud_fallback: true, enforced at runtime.
+- Mutually exclusive with --no-cloud-llm (the latter forbids cloud). Use --cloud-only when local models are too slow for testing.
+- With --cloud-only, `llama3.2:3b-hr-assistant` must NEVER be used. CV parsing uses `llm_request_with_fallback()` like everything else.
+- The `3b-hr-assistant` model is ONLY for --no-cloud-llm mode (local only).
+- **CRITICAL**: When checking `CLOUD_ONLY` global in functions, use `import job_agent.llm as _llm_mod` then `_llm_mod.CLOUD_ONLY` — do NOT use `from job_agent.llm import CLOUD_ONLY` which copies the value at import time and misses runtime mutations.
+
+### 7. Testing — min_score_to_apply: 3.0
+- During all testing, set `scoring.min_score_to_apply: 3.0` globally and per industry.
+- This ensures borderline jobs (score 3.0-4.9) are tested and not auto-rejected.
+- Override to 5.0 for production to reduce false positives.

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
+import json
 import sqlite3
 import datetime
 import re
@@ -55,6 +56,10 @@ def init_db():
         cursor.execute("ALTER TABLE applied_jobs ADD COLUMN pdf_path TEXT")
     except sqlite3.OperationalError:
         pass
+    try:
+        cursor.execute("ALTER TABLE applied_jobs ADD COLUMN relevant_docs TEXT")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     return conn
 
@@ -108,24 +113,26 @@ def is_already_applied(conn, company_name, job_title, url):
             
     return False
 
-def log_application(conn, company_name, job_title, url, score, status, terminal_output=None, pdf_path=None):
+def log_application(conn, company_name, job_title, url, score, status, terminal_output=None, pdf_path=None, relevant_docs=None):
     cursor = conn.cursor()
     date_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    cursor.execute("SELECT id, email_sent, terminal_output, pdf_path FROM applied_jobs WHERE url = ?", (url,))
+    cursor.execute("SELECT id, email_sent, terminal_output, pdf_path, relevant_docs FROM applied_jobs WHERE url = ?", (url,))
     row = cursor.fetchone()
     if row:
-        db_id, existing_email_sent, existing_output, existing_pdf = row
+        db_id, existing_email_sent, existing_output, existing_pdf, existing_docs = row
         final_output = terminal_output if terminal_output is not None else existing_output
         final_pdf = pdf_path if pdf_path is not None else existing_pdf
+        final_docs = json.dumps(relevant_docs) if relevant_docs is not None else existing_docs
         cursor.execute("""
             UPDATE applied_jobs 
-            SET company_name = ?, job_title = ?, score = ?, applied_date = ?, status = ?, terminal_output = ?, pdf_path = ?
+            SET company_name = ?, job_title = ?, score = ?, applied_date = ?, status = ?, terminal_output = ?, pdf_path = ?, relevant_docs = ?
             WHERE id = ?
-        """, (company_name, job_title, score, date_str, status, final_output, final_pdf, db_id))
+        """, (company_name, job_title, score, date_str, status, final_output, final_pdf, final_docs, db_id))
     else:
+        docs_json = json.dumps(relevant_docs) if relevant_docs else None
         cursor.execute("""
-            INSERT INTO applied_jobs (company_name, job_title, url, score, applied_date, status, terminal_output, pdf_path, email_sent)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
-        """, (company_name, job_title, url, score, date_str, status, terminal_output, pdf_path))
+            INSERT INTO applied_jobs (company_name, job_title, url, score, applied_date, status, terminal_output, pdf_path, email_sent, relevant_docs)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+        """, (company_name, job_title, url, score, date_str, status, terminal_output, pdf_path, docs_json))
     conn.commit()

@@ -24,7 +24,7 @@ def _get_jooble_key() -> str:
             "config", "config.yaml",
         )
         if os.path.exists(config_path):
-            with open(config_path) as f:
+            with open(config_path, encoding="utf-8") as f:
                 config = yaml.safe_load(f) or {}
             jooble = config.get("jooble", {}) or {}
             return jooble.get("api_key", "") or ""

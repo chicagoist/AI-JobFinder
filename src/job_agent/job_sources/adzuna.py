@@ -26,7 +26,7 @@ def _get_adzuna_credentials() -> tuple[str, str]:
             "config", "config.yaml",
         )
         if os.path.exists(config_path):
-            with open(config_path) as f:
+            with open(config_path, encoding="utf-8") as f:
                 config = yaml.safe_load(f) or {}
             adzuna = config.get("adzuna", {}) or {}
             return adzuna.get("app_id", "") or "", adzuna.get("app_key", "") or ""
@@ -67,6 +67,7 @@ def search_adzuna(
            f"&app_key={ADZUNA_APP_KEY}"
            f"&what={requests.utils.quote(query)}"
            f"&where={requests.utils.quote(location)}"
+           f"&distance={radius}"
            f"&results_per_page={results_per_page}")
 
     headers = {

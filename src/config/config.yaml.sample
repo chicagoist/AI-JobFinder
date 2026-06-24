@@ -1,3 +1,6 @@
+search:
+  max_results: 25          # Maximale Suchergebnisse pro Quelle
+
 criteria:
   excluded_companies:
   - Example Company
@@ -5,11 +8,13 @@ criteria:
   min_salary_eur: 36000
   min_score: 8.0
   remote_allowed: true
+
 defaults:
   availability: zwei Monate nach Zusage
   notice_period: 3 Monate zum Quartalsende
   salary_expectation: 36.000 €
   work_permit: Germany
+
 gemini:
   api_keys:
   - <YOUR_GEMINI_API_KEY_1>
@@ -18,18 +23,36 @@ gemini:
   - <YOUR_GEMINI_API_KEY_4>
   - <YOUR_GEMINI_API_KEY_5>
   model: gemini-2.5-flash
+
+# Job search API credentials (optional — nur konfigurieren wenn gewünscht)
+adzuna:
+  app_id: <YOUR_ADZUNA_APP_ID>
+  app_key: <YOUR_ADZUNA_APP_KEY>
+
+jooble:
+  api_key: <YOUR_JOOBLE_API_KEY>
+
+# LLM-Konfiguration
 llm:
   allow_cloud_fallback: false
-  local_model: llama3.2:3b
-  priority: local
+  local_model: llama3.2:3b-hr-assistant
+  priority: local                          # local | openrouter | gemini
+  timeout: 600                             # Timeout in Sekunden für lokale LLMs (Ollama/llama-server)
+  # Optional: Pfad zum kompilierten llama-server Binary
+  #   Linux:   /tmp/llama.cpp/build-cpu/bin/llama-server
+  #   Windows: C:\llama.cpp\build\bin\Release\llama-server.exe
+  # llama_server_path: /tmp/llama.cpp/build-cpu/bin/llama-server
+
 openrouter:
   api_key: <YOUR_OPENROUTER_API_KEY>
   model: openai/gpt-oss-120b:free
+
 smtp:
   host: smtp.gmail.com
   password: <YOUR_SMTP_PASSWORD_OR_APP_PASSWORD>
   port: 587
   username: <YOUR_EMAIL>@gmail.com
+
 user_profile:
   # Chrome user data directory — wähle den Pfad für dein Betriebssystem:
   #   Windows: C:\Users\<Username>\AppData\Local\Google\Chrome\User Data

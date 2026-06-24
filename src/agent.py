@@ -59,6 +59,14 @@ def run_config_gui(config_path, criteria_path, profile_path, prompts_path):
         config_data["defaults"] = {}
     if "gemini" not in config_data:
         config_data["gemini"] = {}
+    if "llm" not in config_data:
+        config_data["llm"] = {}
+    if "openrouter" not in config_data:
+        config_data["openrouter"] = {}
+    if "adzuna" not in config_data:
+        config_data["adzuna"] = {}
+    if "jooble" not in config_data:
+        config_data["jooble"] = {}
     if "criteria" not in config_data:
         config_data["criteria"] = {}
         
@@ -217,18 +225,64 @@ def run_config_gui(config_path, criteria_path, profile_path, prompts_path):
     priority_llm_combo.set(config_data.get("llm", {}).get("priority", "local"))
     priority_llm_combo.grid(row=7, column=1, sticky="w", padx=10, pady=5)
     
-    ttk.Separator(tab1, orient="horizontal").grid(row=8, column=0, columnspan=2, sticky="ew", padx=10, pady=8)
+    ttk.Label(tab1, text="Local Model Name:", font=('Segoe UI', 9, 'bold')).grid(row=8, column=0, sticky="w", padx=10, pady=5)
+    local_model_entry = ttk.Entry(tab1, width=30)
+    local_model_entry.insert(0, config_data.get("llm", {}).get("local_model", "llama3.2:3b-hr-assistant"))
+    local_model_entry.grid(row=8, column=1, sticky="w", padx=10, pady=5)
+    
+    llm_timeout_entry = ttk.Entry(tab1, width=15)
+    ttk.Label(tab1, text="LLM Timeout (sec):", font=('Segoe UI', 9, 'bold')).grid(row=9, column=0, sticky="w", padx=10, pady=5)
+    llm_timeout_entry.insert(0, str(config_data.get("llm", {}).get("timeout", 600)))
+    llm_timeout_entry.grid(row=9, column=1, sticky="w", padx=10, pady=5)
+    
+    allow_fallback_var = tk.BooleanVar(value=config_data.get("llm", {}).get("allow_cloud_fallback", False))
+    ttk.Checkbutton(tab1, text="Allow Cloud LLM Fallback", variable=allow_fallback_var).grid(row=10, column=0, columnspan=2, sticky="w", padx=10, pady=2)
+    ttk.Label(tab1, text="Use OpenRouter/Gemini when local model is unavailable (GDPR: PII leaves your device)", font=('Segoe UI', 8), foreground="#666666").grid(row=11, column=0, columnspan=2, sticky="w", padx=25, pady=0)
+    
+    ttk.Separator(tab1, orient="horizontal").grid(row=12, column=0, columnspan=2, sticky="ew", padx=10, pady=8)
     
     smtp_section = config_data.get("smtp", {})
-    ttk.Label(tab1, text="SMTP Email (Sender):", font=('Segoe UI', 9, 'bold')).grid(row=9, column=0, sticky="w", padx=10, pady=5)
+    ttk.Label(tab1, text="SMTP Email (Sender):", font=('Segoe UI', 9, 'bold')).grid(row=13, column=0, sticky="w", padx=10, pady=5)
     smtp_username_entry = ttk.Entry(tab1, width=40)
     smtp_username_entry.insert(0, smtp_section.get("username", ""))
-    smtp_username_entry.grid(row=9, column=1, sticky="w", padx=10, pady=5)
+    smtp_username_entry.grid(row=13, column=1, sticky="w", padx=10, pady=5)
     
-    ttk.Label(tab1, text="Google App Password:", font=('Segoe UI', 9, 'bold')).grid(row=10, column=0, sticky="w", padx=10, pady=5)
+    ttk.Label(tab1, text="Google App Password:", font=('Segoe UI', 9, 'bold')).grid(row=14, column=0, sticky="w", padx=10, pady=5)
     smtp_password_entry = ttk.Entry(tab1, width=40, show="*")
     smtp_password_entry.insert(0, smtp_section.get("password", ""))
-    smtp_password_entry.grid(row=10, column=1, sticky="w", padx=10, pady=5)
+    smtp_password_entry.grid(row=14, column=1, sticky="w", padx=10, pady=5)
+    
+    ttk.Separator(tab1, orient="horizontal").grid(row=15, column=0, columnspan=2, sticky="ew", padx=10, pady=8)
+    
+    ttk.Label(tab1, text="OpenRouter API Key:", font=('Segoe UI', 9, 'bold')).grid(row=16, column=0, sticky="w", padx=10, pady=5)
+    openrouter_key_entry = ttk.Entry(tab1, width=50, show="*")
+    openrouter_key_entry.insert(0, config_data.get("openrouter", {}).get("api_key", ""))
+    openrouter_key_entry.grid(row=16, column=1, sticky="w", padx=10, pady=5)
+    ttk.Label(tab1, text="Fallback LLM provider (OpenAI-compatible models)", font=('Segoe UI', 8), foreground="#666666").grid(row=17, column=0, columnspan=2, sticky="w", padx=25, pady=0)
+    
+    ttk.Label(tab1, text="OpenRouter Model:").grid(row=18, column=0, sticky="w", padx=10, pady=5)
+    openrouter_model_entry = ttk.Entry(tab1, width=50)
+    openrouter_model_entry.insert(0, config_data.get("openrouter", {}).get("model", "openai/gpt-oss-120b:free"))
+    openrouter_model_entry.grid(row=18, column=1, sticky="w", padx=10, pady=5)
+    
+    ttk.Separator(tab1, orient="horizontal").grid(row=19, column=0, columnspan=2, sticky="ew", padx=10, pady=8)
+    
+    ttk.Label(tab1, text="Adzuna App ID:", font=('Segoe UI', 9, 'bold')).grid(row=20, column=0, sticky="w", padx=10, pady=5)
+    adzuna_id_entry = ttk.Entry(tab1, width=30)
+    adzuna_id_entry.insert(0, config_data.get("adzuna", {}).get("app_id", ""))
+    adzuna_id_entry.grid(row=20, column=1, sticky="w", padx=10, pady=5)
+    
+    ttk.Label(tab1, text="Adzuna App Key:").grid(row=21, column=0, sticky="w", padx=10, pady=5)
+    adzuna_key_entry = ttk.Entry(tab1, width=50, show="*")
+    adzuna_key_entry.insert(0, config_data.get("adzuna", {}).get("app_key", ""))
+    adzuna_key_entry.grid(row=21, column=1, sticky="w", padx=10, pady=5)
+    ttk.Label(tab1, text="UK-based job search API (optional — for German job market)", font=('Segoe UI', 8), foreground="#666666").grid(row=22, column=0, columnspan=2, sticky="w", padx=25, pady=0)
+    
+    ttk.Label(tab1, text="Jooble API Key:").grid(row=23, column=0, sticky="w", padx=10, pady=5)
+    jooble_key_entry = ttk.Entry(tab1, width=50, show="*")
+    jooble_key_entry.insert(0, config_data.get("jooble", {}).get("api_key", ""))
+    jooble_key_entry.grid(row=23, column=1, sticky="w", padx=10, pady=5)
+    ttk.Label(tab1, text="Job search aggregator API (optional)", font=('Segoe UI', 8), foreground="#666666").grid(row=24, column=0, columnspan=2, sticky="w", padx=25, pady=0)
     
     # --- TAB 2: Candidate Profile & Defaults ---
     tab2_container, tab2 = create_tab_frame(notebook)
@@ -291,6 +345,138 @@ def run_config_gui(config_path, criteria_path, profile_path, prompts_path):
     certs_text.grid(row=r_idx+1, column=0, columnspan=2, padx=10, pady=5, sticky="w")
     certs_text.insert("1.0", "\n".join(profile_data.get("certifications", [])))
     r_idx += 2
+    
+    # Languages section
+    ttk.Label(tab2, text="Languages", font=('Segoe UI', 10, 'bold')).grid(row=r_idx, column=0, columnspan=2, sticky="w", padx=10, pady=10)
+    r_idx += 1
+    
+    lang_entries = {}
+    for lang_key, lang_label in [
+        ("deutsch", "Deutsch:"),
+        ("englisch", "Englisch:"),
+        ("ukrainisch", "Ukrainisch:"),
+        ("russisch", "Russisch:"),
+        ("französisch", "Französisch:"),
+        ("polnisch", "Polnisch:"),
+        ("spanisch", "Spanisch:"),
+    ]:
+        ttk.Label(tab2, text=lang_label).grid(row=r_idx, column=0, sticky="w", padx=10, pady=2)
+        ent = ttk.Entry(tab2, width=25)
+        ent.insert(0, profile_data.get("languages", {}).get(lang_key, ""))
+        ent.grid(row=r_idx, column=1, sticky="w", padx=10, pady=2)
+        lang_entries[lang_key] = ent
+        r_idx += 1
+    ttk.Label(tab2, text="Enter levels like: Muttersprache, C2, B2, A1, etc.", font=('Segoe UI', 8), foreground="#666666").grid(row=r_idx, column=0, columnspan=2, sticky="w", padx=25, pady=0)
+    r_idx += 1
+    
+    # Education
+    ttk.Label(tab2, text="Education (One entry per line)", font=('Segoe UI', 10, 'bold')).grid(row=r_idx, column=0, columnspan=2, sticky="w", padx=10, pady=10)
+    r_idx += 1
+    ttk.Label(tab2, text="Format: Degree in Field @ Institution (year)", font=('Segoe UI', 8), foreground="#666666").grid(row=r_idx, column=0, columnspan=2, sticky="w", padx=25, pady=0)
+    r_idx += 1
+    edu_text = scrolledtext.ScrolledText(tab2, width=50, height=5, font=('Segoe UI', 9))
+    edu_text.grid(row=r_idx, column=0, columnspan=2, padx=10, pady=5, sticky="w")
+    edu_list = profile_data.get("education", [])
+    edu_lines = []
+    for e in edu_list[:15]:
+        if isinstance(e, dict):
+            deg = e.get("degree", "")
+            fld = e.get("field", "")
+            inst = e.get("institution", "")
+            year = e.get("year", e.get("graduation_year", ""))
+            parts = []
+            if deg and fld:
+                parts.append(f"{deg} in {fld}")
+            elif deg:
+                parts.append(deg)
+            if inst:
+                parts.append(f"@ {inst}")
+            if year:
+                parts.append(f"({year})")
+            edu_lines.append(" ".join(parts))
+        else:
+            edu_lines.append(str(e))
+    edu_text.insert("1.0", "\n".join(edu_lines))
+    r_idx += 1
+    
+    # Experience
+    ttk.Label(tab2, text="Work Experience (One entry per line)", font=('Segoe UI', 10, 'bold')).grid(row=r_idx, column=0, columnspan=2, sticky="w", padx=10, pady=10)
+    r_idx += 1
+    ttk.Label(tab2, text="Format: Role at Company (years) — short description", font=('Segoe UI', 8), foreground="#666666").grid(row=r_idx, column=0, columnspan=2, sticky="w", padx=25, pady=0)
+    r_idx += 1
+    exp_text = scrolledtext.ScrolledText(tab2, width=50, height=5, font=('Segoe UI', 9))
+    exp_text.grid(row=r_idx, column=0, columnspan=2, padx=10, pady=5, sticky="w")
+    exp_list = profile_data.get("experience", [])
+    exp_lines = []
+    for e in exp_list[:10]:
+        if isinstance(e, dict):
+            title = e.get("title", e.get("position", ""))
+            company = e.get("company", "")
+            years = e.get("years", e.get("duration", ""))
+            desc = e.get("description", "")
+            parts = []
+            if title:
+                parts.append(title)
+            if company:
+                parts.append(f"at {company}")
+            if years:
+                parts.append(f"({years})")
+            line = " ".join(parts)
+            if isinstance(desc, list):
+                desc = "; ".join(desc[:3])
+            if desc:
+                line += f" — {desc}"
+            exp_lines.append(line)
+        else:
+            exp_lines.append(str(e))
+    exp_text.insert("1.0", "\n".join(exp_lines))
+    r_idx += 1
+    
+    # Seniority Level
+    ttk.Label(tab2, text="Seniority Level:", font=('Segoe UI', 9, 'bold')).grid(row=r_idx, column=0, sticky="w", padx=10, pady=5)
+    seniority_var = tk.StringVar(value=profile_data.get("seniority_level", "Junior"))
+    seniority_combo = ttk.Combobox(tab2, textvariable=seniority_var, values=["Junior", "Middle", "Senior", "Lead", "Architect", "Expert", "Manager", "Director"], state="readonly", width=15)
+    seniority_combo.grid(row=r_idx, column=1, sticky="w", padx=10, pady=5)
+    r_idx += 1
+    
+    # Separator + Reset Profile button
+    ttk.Separator(tab2, orient="horizontal").grid(row=r_idx, column=0, columnspan=2, sticky="ew", padx=10, pady=8)
+    r_idx += 1
+    ttk.Label(tab2, text="Reset candidate profile to defaults (clears all personal data):", font=('Segoe UI', 8), foreground="#666666").grid(row=r_idx, column=0, columnspan=2, sticky="w", padx=10, pady=5)
+    r_idx += 1
+    
+    def reset_profile():
+        result = messagebox.askyesno("Reset Profile", "Delete ALL candidate personal data and restore defaults?\nThis will clear name, email, skills, certs, education, and experience.")
+        if not result:
+            return
+        profile_data.clear()
+        profile_data.update({
+            "personal_info": {"first_name": "", "last_name": "", "email": "", "phone": "", "address": "", "city": "", "country": "Deutschland", "availability": "sofort"},
+            "languages": {"deutsch": "B1", "englisch": "A1"},
+            "skills": [],
+            "certifications": [],
+            "education": [],
+            "experience": [],
+            "experience_years": 0.0,
+            "seniority_level": "Junior"
+        })
+        # Refresh all widgets
+        for k, ent in pi_entries.items():
+            ent.delete(0, tk.END)
+            ent.insert(0, profile_data["personal_info"].get(k, ""))
+        skills_text.delete("1.0", tk.END)
+        certs_text.delete("1.0", tk.END)
+        edu_text.delete("1.0", tk.END)
+        exp_text.delete("1.0", tk.END)
+        exp_years_entry.delete(0, tk.END)
+        exp_years_entry.insert(0, "0.0")
+        seniority_combo.set("Junior")
+        for k, ent in lang_entries.items():
+            ent.delete(0, tk.END)
+        messagebox.showinfo("Profile Reset", "Candidate profile has been cleared. Save to persist.")
+    
+    ttk.Button(tab2, text="🧹 Clear & Reset Profile", command=reset_profile, style='TButton').grid(row=r_idx, column=0, columnspan=2, sticky="w", padx=10, pady=10)
+    r_idx += 1
     
     # --- TAB 3: Prompts Editor ---
     tab3 = ttk.Frame(notebook)
@@ -406,6 +592,12 @@ def run_config_gui(config_path, criteria_path, profile_path, prompts_path):
     industry_var = tk.StringVar(value=search_cfg.get("industry", "IT"))
     industry_combo = ttk.Combobox(tab4, textvariable=industry_var, values=["IT", "Handwerk", "Allgemein", "Bildung/Lehre"], state="readonly", width=15)
     industry_combo.grid(row=25, column=1, sticky="w", padx=10, pady=5)
+    
+    ttk.Label(tab4, text="Max Results per Source:").grid(row=26, column=0, sticky="w", padx=10, pady=5)
+    max_results_entry = ttk.Entry(tab4, width=15)
+    max_results_entry.insert(0, str(search_cfg.get("max_results", 25)))
+    max_results_entry.grid(row=26, column=1, sticky="w", padx=10, pady=5)
+    ttk.Label(tab4, text="Limits job search results per API source (default: 25)", font=('Segoe UI', 8), foreground="#666666").grid(row=27, column=0, columnspan=2, sticky="w", padx=25, pady=0)
 
     def save_and_close():
         edited_prompts[last_selected] = prompt_text_widget.get("1.0", tk.END).strip()
@@ -416,6 +608,12 @@ def run_config_gui(config_path, criteria_path, profile_path, prompts_path):
         if "llm" not in config_data:
             config_data["llm"] = {}
         config_data["llm"]["priority"] = priority_llm_combo.get()
+        config_data["llm"]["local_model"] = local_model_entry.get().strip()
+        config_data["llm"]["allow_cloud_fallback"] = allow_fallback_var.get()
+        try:
+            config_data["llm"]["timeout"] = int(llm_timeout_entry.get().strip())
+        except ValueError:
+            config_data["llm"]["timeout"] = 600
         
         if "smtp" not in config_data:
             config_data["smtp"] = {}
@@ -426,6 +624,14 @@ def run_config_gui(config_path, criteria_path, profile_path, prompts_path):
         config_data["user_profile"]["chrome_profile"] = chrome_profile_entry.get().strip()
         config_data["user_profile"]["cv_path"] = cv_path_entry.get().strip()
         config_data["user_profile"]["documents_dir"] = doc_dir_entry.get().strip()
+        
+        config_data["openrouter"]["api_key"] = openrouter_key_entry.get().strip()
+        config_data["openrouter"]["model"] = openrouter_model_entry.get().strip()
+        
+        config_data["adzuna"]["app_id"] = adzuna_id_entry.get().strip()
+        config_data["adzuna"]["app_key"] = adzuna_key_entry.get().strip()
+        
+        config_data["jooble"]["api_key"] = jooble_key_entry.get().strip()
         
         config_data["defaults"]["salary_expectation"] = def_entries["salary_expectation"].get().strip()
         config_data["defaults"]["availability"] = def_entries["availability"].get().strip()
@@ -449,6 +655,62 @@ def run_config_gui(config_path, criteria_path, profile_path, prompts_path):
         
         profile_data["languages"]["Deutsch"] = def_entries["german_level"].get().strip()
         profile_data["languages"]["Englisch"] = min_english_entry.get().strip()
+        for lang_key, ent in lang_entries.items():
+            val = ent.get().strip()
+            if val:
+                profile_data["languages"][lang_key] = val
+            elif lang_key in profile_data.get("languages", {}):
+                del profile_data["languages"][lang_key]
+        
+        edu_raw = edu_text.get("1.0", tk.END).strip()
+        edu_list = []
+        for line in edu_raw.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            item = {"raw": line}
+            # Try to parse: "Degree in Field @ Institution (year)"
+            import re as _re
+            year_match = _re.search(r'\((\d{4})\)', line)
+            if year_match:
+                item["year"] = year_match.group(1)
+            at_parts = line.split(" @ ")
+            if len(at_parts) > 1:
+                item["institution"] = at_parts[1].split(" (")[0].strip()
+                degree_part = at_parts[0].strip()
+            else:
+                degree_part = line.split(" (")[0].strip()
+            if " in " in degree_part:
+                parts = degree_part.split(" in ", 1)
+                item["degree"] = parts[0].strip()
+                item["field"] = parts[1].strip()
+            else:
+                item["degree"] = degree_part
+            edu_list.append(item)
+        profile_data["education"] = edu_list
+        
+        exp_raw = exp_text.get("1.0", tk.END).strip()
+        exp_list = []
+        for line in exp_raw.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            item = {"raw": line}
+            desc_parts = line.split(" — ", 1)
+            main_part = desc_parts[0]
+            if len(desc_parts) > 1:
+                item["description"] = desc_parts[1].strip()
+            import re as _re2
+            role_match = _re2.match(r'(.+?)\s+at\s+(.+?)(?:\s+\((\d[^)]*)\))?\s*$', main_part)
+            if role_match:
+                item["title"] = role_match.group(1).strip()
+                item["company"] = role_match.group(2).strip()
+                if role_match.group(3):
+                    item["years"] = role_match.group(3).strip()
+            exp_list.append(item)
+        profile_data["experience"] = exp_list
+        
+        profile_data["seniority_level"] = seniority_combo.get()
         
         try:
             criteria_data["scoring"]["min_score_to_apply"] = float(min_score_entry.get().strip())
@@ -496,6 +758,10 @@ def run_config_gui(config_path, criteria_path, profile_path, prompts_path):
         if "search" not in criteria_data:
             criteria_data["search"] = {}
         criteria_data["search"]["industry"] = industry_var.get()
+        try:
+            criteria_data["search"]["max_results"] = int(max_results_entry.get().strip())
+        except ValueError:
+            criteria_data["search"]["max_results"] = 25
         
         mand_skills_raw = mand_skills_text.get("1.0", tk.END).strip()
         criteria_data["cover_letter"]["mandatory_skills"] = [s.strip() for s in mand_skills_raw.split("\n") if s.strip()]
@@ -645,7 +911,21 @@ def parse_cv(cv_path, output_json_path, criteria_path=None):
     }}
     """
     
-    response = llm_request_with_fallback(prompt)
+    # Use configured local model for CV parsing, fall back to main model if unavailable
+    from job_agent.ollama_llm import call_ollama, ollama_available
+    import job_agent.llm as _llm_mod
+    CV_PARSE_MODEL = _llm_mod.LOCAL_MODEL
+    response = None
+    if not _llm_mod.CLOUD_ONLY and ollama_available(CV_PARSE_MODEL):
+        print(f"{Colors.CYAN}[CV Parse] Using model: {CV_PARSE_MODEL}{Colors.END}")
+        local_resp = call_ollama(prompt, model=CV_PARSE_MODEL)
+        if local_resp:
+            class LocalResponse:
+                def __init__(self, text):
+                    self.text = text
+            response = LocalResponse(local_resp)
+    if response is None:
+        response = llm_request_with_fallback(prompt)
     
     if response is None:
         print(f"{Colors.RED}Warning: LLM returned None for CV parsing. Returning empty profile.{Colors.END}")
@@ -710,7 +990,7 @@ def normalize_profile(profile_data):
 # Parse Cover Letter PDF
 def parse_anschreiben_pdf(file_path):
     import fitz
-    print(f"   Parsing Cover Letter '{file_path}' via Gemini Flash...")
+    print(f"   Parsing Cover Letter '{file_path}' via LLM...")
     doc = fitz.open(file_path)
     text = ""
     for page in doc:
@@ -747,7 +1027,7 @@ def parse_anschreiben_pdf(file_path):
 # Parse Certificate PDF
 def parse_zertifikat_pdf(file_path):
     import fitz
-    print(f"   Parsing Certificate '{file_path}' via Gemini Flash...")
+    print(f"   Parsing Certificate '{file_path}' via LLM...")
     doc = fitz.open(file_path)
     text = ""
     for page in doc:
@@ -859,11 +1139,10 @@ def index_candidate_files(workspace_dir, conn, criteria_path=None):
     import glob
     print(f"\n{Colors.MAGENTA}{Colors.BOLD}--- Indexing candidate PDF files ---{Colors.END}")
     
-    # Scan documents/ and output/ for PDF files
+    # Scan only documents/ for PDF files (output/ contains generated Anschreiben, not candidate files)
     project_root = os.path.dirname(workspace_dir)
     doc_pattern = os.path.join(project_root, "documents", "*.pdf")
-    out_pattern = os.path.join(workspace_dir, "output", "*.pdf")
-    pdf_files = glob.glob(doc_pattern) + glob.glob(out_pattern)
+    pdf_files = glob.glob(doc_pattern)
     
     # Get current records in database and normalize stored paths to relative from workspace_dir
     cursor = conn.cursor()
@@ -1384,8 +1663,14 @@ def main():
     parser.add_argument("--criteria", type=str, default="config/job_criteria.yaml", help="Path to job criteria config")
     parser.add_argument("--debug", action="store_true", help="Enable debugging mode")
     parser.add_argument("--ignore-ollama", action="store_true", help="Proceed even if Ollama is not running (demo/testing only)")
+    parser.add_argument("--no-cloud-llm", action="store_true",
+                        help="Forbid remote LLM calls (local Ollama/llama-server only — no OpenRouter/Gemini)")
+    parser.add_argument("--cloud-only", action="store_true",
+                        help="Skip local LLM entirely — use OpenRouter/Gemini only")
     parser.add_argument("--send-email", action="store_true",
-                        help="Generate candidate digest .eml for all pending applications (no auto-send)")
+                        help="Send candidate digest via SMTP for all pending applications (per-job, to candidate's own email)")
+    parser.add_argument("--gui", action="store_true",
+                        help="Open configuration GUI")
 
     args = parser.parse_args()
 
@@ -1403,6 +1688,11 @@ def main():
     restore_active_configs_from_samples(workspace_dir, config_path, criteria_path, profile_path, prompts_path)
     # PROMPTS is already loaded at module level — do NOT shadow with local var
 
+    # Launch GUI if --gui explicitly requested (before loading configs)
+    if args.gui:
+        run_config_gui(config_path, criteria_path, profile_path, prompts_path)
+        return
+
     # Launch GUI if no CLI mode specified (before loading configs)
     if not any([args.pipeline, args.parse_cv, args.reset_candidate,
                 args.generate_dummy_cv, args.test_score, args.test_anschreiben,
@@ -1418,7 +1708,22 @@ def main():
         return
 
     conn = init_db()
-    
+
+    # Initialize LLM globals from config BEFORE any LLM calls (index_candidate_files calls LLM)
+    from job_agent.llm import init_gemini as _init_gemini
+    _init_gemini(config_path)
+
+    # Apply LLM runtime flags BEFORE any LLM calls (index_candidate_files calls LLM)
+    if args.no_cloud_llm:
+        import job_agent.llm as _llm_module
+        _llm_module.NO_CLOUD_LLM = True
+        print(f"{Colors.CYAN}--no-cloud-llm: Remote LLM providers blocked. Local only.{Colors.END}")
+
+    if args.cloud_only:
+        import job_agent.llm as _llm_module
+        _llm_module.CLOUD_ONLY = True
+        print(f"{Colors.CYAN}--cloud-only: Local LLM skipped. OpenRouter/Gemini only.{Colors.END}")
+
     # Automatically scan workspace and update file index database on startup
     index_candidate_files(workspace_dir, conn, criteria_path)
     
@@ -1439,23 +1744,24 @@ def main():
         cv_path = os.path.join(workspace_dir, cv_name)
 
     if args.pipeline and args.send_email:
-        # Both: run pipeline (already generates digest at end), no redundant call
-        print(f"{Colors.CYAN}--pipeline + --send-email: pipeline digest wird automatisch erstellt.{Colors.END}")
+        # Both: run pipeline (sends per-job SMTP + generates digest at end)
+        print(f"{Colors.CYAN}--pipeline + --send-email: Per-job SMTP + digest draft.{Colors.END}")
         run_pipeline_mode(workspace_dir, config, criteria_path, profile_path,
                           args.search_jobs, args.location, args.radius, args.force_generate,
-                          args.auto_approve, args.ignore_ollama)
+                          args.auto_approve, args.ignore_ollama, send_email=True)
         return
 
     if args.send_email:
+        # Standalone --send-email: send per-job SMTP for all pending + generate digest
         from job_agent.pipeline import JobPipeline
         pipeline = JobPipeline(workspace_dir=workspace_dir, criteria_path=criteria_path, profile_path=profile_path)
         pipeline.initialize()
+        pipeline.send_all_pending_candidate_emails()
         digest_path = pipeline.generate_pending_digest()
         if digest_path:
             print(f"{Colors.GREEN}✅ Candidate digest created: {digest_path}{Colors.END}")
-            print(f"{Colors.YELLOW}📤 Please open the .eml file and send manually.{Colors.END}")
         else:
-            print(f"{Colors.YELLOW}No pending applications to send.{Colors.END}")
+            print(f"{Colors.YELLOW}No pending applications to digest.{Colors.END}")
         return
 
     if args.pipeline:
@@ -1466,7 +1772,9 @@ def main():
 
     # --- Guard: Local LLM required but neither llama-server nor Ollama is running ---
     # Covers --parse-cv, --test-score, --test-anschreiben (all call LLM)
-    if args.parse_cv or args.test_score or args.test_anschreiben:
+    if args.cloud_only:
+        pass  # skip guard — cloud-only handles LLM
+    elif args.parse_cv or args.test_score or args.test_anschreiben:
         init_gemini()  # Load globals from config
         if llm_module.PRIORITY_LLM == "local" and not llm_module.ALLOW_CLOUD_FALLBACK:
             local_available = llama_server_available() or ollama_available(llm_module.LOCAL_MODEL)

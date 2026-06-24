@@ -94,7 +94,7 @@ AI-JobFinder-dist.zip
 !knowledge.md
 !/knowledge.md
 
-# Test files used during development (not part of the core app)
+# Test/development files (not part of the core app)
 src/mock_jobs.py
 src/test_genai.py
 src/test_invalid.py
@@ -102,3 +102,16 @@ src/test_job.py
 src/test_pw.py
 src/patch_llm.py
 src/check_secrets.py.sample
+Modelfile-*
+models/
+build/
+fix_*.py
+src/seed_db.py
+src/drafts/
+src/check_line*.py
+src/find_*.py
+src/fix_quotes.py
+src/repair_yaml.py
+temp.txt
+test_*.py
+scripts/setup_local_llm.ps1

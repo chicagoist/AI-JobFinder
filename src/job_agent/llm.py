@@ -27,12 +27,20 @@ INITIALIZED = False
 PRIORITY_LLM = "local"  # "local" | "openrouter" | "gemini"
 LOCAL_MODEL = DEFAULT_MODEL  # Ollama model name
 ALLOW_CLOUD_FALLBACK = False  # GDPR: must be explicitly set to true in config.yaml
+NO_CLOUD_LLM = False    # --no-cloud-llm flag: forbid remote LLM entirely
+CLOUD_ONLY = False      # --cloud-only flag: skip local LLM, cloud providers only
+LLM_TIMEOUT = 600     # default timeout for local LLMs, overridable via config
 _gdpr_warning_shown = False  # Show GDPR block warning only once per session
 
 
 def init_gemini(config_path=None, force=False):
-    global CURRENT_KEY_INDEX, API_KEYS, GEMINI_MODEL, IS_CONFIG_DRIVEN_KEYS, INITIALIZED, KEY_STATUS, PRIORITY_LLM, LOCAL_MODEL, ALLOW_CLOUD_FALLBACK
-    
+    global CURRENT_KEY_INDEX, API_KEYS, GEMINI_MODEL, IS_CONFIG_DRIVEN_KEYS, INITIALIZED, KEY_STATUS, PRIORITY_LLM, LOCAL_MODEL, ALLOW_CLOUD_FALLBACK, LLM_TIMEOUT, CLOUD_ONLY
+
+    # --cloud-only is a runtime override that takes effect regardless of INITIALIZED
+    if CLOUD_ONLY:
+        PRIORITY_LLM = "openrouter"
+        ALLOW_CLOUD_FALLBACK = True
+
     if INITIALIZED and not force:
         return
 
@@ -58,6 +66,12 @@ def init_gemini(config_path=None, force=False):
             LOCAL_MODEL = local_model
         # Read cloud fallback permission (GDPR)
         ALLOW_CLOUD_FALLBACK = config.get("llm", {}).get("allow_cloud_fallback", False)
+        # Read timeout from config (applies to all LLMs, overridable per-module)
+        LLM_TIMEOUT = config.get("llm", {}).get("timeout", LLM_TIMEOUT)
+        # --cloud-only flag override (must also apply after config read)
+        if CLOUD_ONLY:
+            PRIORITY_LLM = "openrouter"
+            ALLOW_CLOUD_FALLBACK = True
     except Exception:
         pass
 
@@ -211,6 +225,15 @@ def llm_request_with_fallback(prompt, **kwargs):
     """
     global PRIORITY_LLM, LOCAL_MODEL
 
+    # --- --cloud-only: skip local entirely ---
+    if CLOUD_ONLY:
+        print(f"{Colors.CYAN}[LLM] --cloud-only: Local LLM skipped. Trying OpenRouter...{Colors.END}")
+        or_resp = call_openrouter(prompt, **kwargs)
+        if or_resp:
+            return or_resp
+        print(f"{Colors.YELLOW}[LLM] OpenRouter failed. Trying Gemini...{Colors.END}")
+        return generate_content_with_retry(GEMINI_MODEL, prompt, **kwargs)
+
     # --- Priority: LOCAL (llama-server → Ollama) ---
     if PRIORITY_LLM == "local":
         # Try compiled llama-server first (direct GGUF, no Ollama dependency)
@@ -247,6 +270,12 @@ def llm_request_with_fallback(prompt, **kwargs):
             else:
                 print(f"{Colors.CYAN}  llama-server: {Colors.END}llama-server --model <gguf> --port 8080")
                 print(f"{Colors.CYAN}  Ollama:        {Colors.END}ollama serve")
+
+        # Block cloud LLM if --no-cloud-llm flag is set (strongest guard)
+        if NO_CLOUD_LLM:
+            print(f"{Colors.RED}{Colors.BOLD}[--no-cloud-llm] Cloud LLM access is FORBIDDEN by --no-cloud-llm flag.{Colors.END}")
+            print(f"{Colors.RED}  All inference must stay local. Start llama-server or Ollama.{Colors.END}")
+            return None
 
         # GDPR: Block cloud fallback unless explicitly allowed (read once in init_gemini)
         if not ALLOW_CLOUD_FALLBACK:

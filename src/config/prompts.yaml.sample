@@ -25,7 +25,8 @@ scoring_prompt_Bildung/Lehre: "Du bist ein erfahrener Personalreferent für den 
   \n{rejections_str}\n\nPflichtkompetenzen für diese Branche (in der Bewertung gewichten): {mandatory_skills}\n\nStellenbeschreibung:\n\
   {job_description}\n\nGib das Ergebnis ausschließlich als valides JSON-Objekt im folgenden Format zurück (ohne Markdown-Formatierung\
   \ wie ```json):\n{{\n  \"total_score\": 7.5,\n  \"ko_criterion_triggered\": false,\n  \"reasoning\": \"Detaillierte Begründung\
-  \ auf Deutsch, warum dieser Score vergeben wurde...\"\n}}"
+  \ auf Deutsch, warum dieser Score vergeben wurde...\",\n  \"relevant_documents\": [\"Lebenslauf\", \"Zertifikat\", \"Diplom\"]\n\
+  }}\nDie \"relevant_documents\"-Liste enthält die Klassifikationen der Kandidaten-Dokumente, die für die Bewertung relevant waren. Immer \"Lebenslauf\" einschließen, wenn das Profil verwendet wurde. Leere Liste, wenn keins relevant."
 scoring_prompt_IT: "Du bist ein erfahrener IT-Recruiter in Deutschland. Vergleiche das Kandidatenprofil mit der Stellenbeschreibung\
   \ (Job Description).\n\nKandidatenprofil (JSON):\n{candidate_profile}\n\nBewerte das Match auf einer Skala von 0 bis 10.\n\
   \nEin Score von 10 bedeutet perfekte Übereinstimmung. Ein Score von 0 bedeutet, dass K.O.-Kriterien greifen oder die Rolle\
@@ -52,7 +53,8 @@ scoring_prompt_IT: "Du bist ein erfahrener IT-Recruiter in Deutschland. Vergleic
   \   - Stellen vor Ort in anderen Regionen (z.B. Berlin, München, Hamburg) sind K.O. (Score 0).\n\n{rejections_str}\n\nStellenbeschreibung:\n\
   {job_description}\n\nGib das Ergebnis ausschließlich als valides JSON-Objekt im folgenden Format zurück (ohne Markdown-Formatierung\
   \ wie ```json):\n{{\n  \"total_score\": 8.5,\n  \"ko_criterion_triggered\": false,\n  \"reasoning\": \"Detaillierte Begründung\
-  \ auf Deutsch, warum dieser Score vergeben wurde...\"\n}}"
+  \ auf Deutsch, warum dieser Score vergeben wurde...\",\n  \"relevant_documents\": [\"Lebenslauf\", \"Zertifikat\"]\n}}\n\
+Die \"relevant_documents\"-Liste enthält die Klassifikationen der Kandidaten-Dokumente, die für die Bewertung relevant waren. Immer \"Lebenslauf\" einschließen, wenn das Profil verwendet wurde. Leere Liste, wenn keins relevant."
 scoring_prompt: "Vergleiche das Kandidatenprofil mit der Stellenbeschreibung (Job Description).\n\nKandidatenprofil (JSON):\n\
   {candidate_profile}\n\nBewerte das Match auf einer Skala von 0 bis 10.\n\nEin Score von 10 bedeutet perfekte Übereinstimmung.\
   \ Ein Score von 0 bedeutet, dass K.O.-Kriterien greifen oder die Rolle absolut unpassend ist.\n\nRegeln:\n1. Mindestgehalt:\
@@ -61,7 +63,8 @@ scoring_prompt: "Vergleiche das Kandidatenprofil mit der Stellenbeschreibung (Jo
   \ K.O.-Kriterien: Prüfe Sicherheitsfreigaben ({clearance_keywords}), Zertifikate ({certifications}), Bildungsanbieter ({spam_keywords}).\n\
   4. Berufserfahrung seit {career_start_year}. Bewerte entsprechend der Anforderungen.\n\n{rejections_str}\n\nStellenbeschreibung:\n\
   {job_description}\n\nGib das Ergebnis als JSON zurück:\n{{\n  \"total_score\": 0.0,\n  \"ko_criterion_triggered\": false,\n\
-  \  \"reasoning\": \"Begründung\"\n}}"
+  \  \"reasoning\": \"Begründung\",\n  \"relevant_documents\": [\"Lebenslauf\"]\n}}\n\
+Die \"relevant_documents\"-Liste enthält die Klassifikationen der Kandidaten-Dokumente, die für die Bewertung relevant waren. Immer \"Lebenslauf\" einschließen, wenn das Profil verwendet wurde. Leere Liste, wenn keins relevant."
 cover_letter_prompt: "Erstelle ein professionelles Anschreiben auf Deutsch basierend auf dem Kandidatenprofil und der Stellenbeschreibung.\n\
   \nKandidatenprofil:\n{candidate_profile}\n\nStellenbeschreibung:\n{job_description}\n\nZusätzliche Vorgaben:\n- Gehaltsvorstellung:\
   \ {salary_exp} € brutto pro Jahr.\n- Verfügbarkeit / Eintrittstermin: {availability}.\n- Sprachniveau Deutsch: {candidate_german}.\n\

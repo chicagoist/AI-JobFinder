@@ -21,6 +21,7 @@ Principles: SOLID, KISS, Clean Code, Single Responsibility.
 
 import os
 import json
+import html
 import datetime
 import sqlite3
 from typing import Optional, cast
@@ -35,6 +36,7 @@ from job_agent.ollama_llm import ollama_available
 from job_agent.llama_server_llm import llama_server_available
 from job_agent.job_sources import search_all_sources, JobPosting
 from job_agent.email_draft_generator import generate_email_draft
+from job_agent.email_sender import send_candidate_email
 from job_agent.direct_email_applier import extract_contact_info, \
     personalize_anschreiben
 
@@ -55,6 +57,8 @@ class ProcessResult:
     anschreiben_data: Optional[dict] = None
     pdf_path: Optional[str] = None
     draft_path: Optional[str] = None
+    email_sent: bool = False
+    relevant_docs: list[str] = None
     status: str = "Skipped"
     message: str = ""
     reasoning: str = ""
@@ -77,10 +81,12 @@ class JobPipeline:
         config_path: Optional[str] = None,
         criteria_path: Optional[str] = None,
         profile_path: Optional[str] = None,
+        send_email: bool = False,
     ):
         if workspace_dir is None:
             workspace_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.workspace_dir = workspace_dir
+        self.send_email = send_email
 
         # Config paths — try src/config/ first, then workspace root
         self.config_dir = os.path.join(workspace_dir, "config")
@@ -218,8 +224,8 @@ class JobPipeline:
             spam_keywords=", ".join(ko.get("spam_providers", {}).get("blocked_keywords", [])) or "Keine",
             datacenter_keywords=", ".join(ko.get("datacenter_physical_work", {}).get("keywords", [])) or "Keine",
             min_salary=ko.get("salary", {}).get("min_annual_eur", 36000),
-            candidate_german=ko.get("languages", {}).get("min_required_german", "B1"),
-            candidate_english=ko.get("languages", {}).get("min_required_english", "A2"),
+            candidate_german=self.candidate_profile.get("languages", {}).get("deutsch", "Keine"),
+            candidate_english=self.candidate_profile.get("languages", {}).get("englisch", "Keine"),
             previous_applications=previous_apps,
         )
 
@@ -258,7 +264,14 @@ class JobPipeline:
         self.initialize()
         industry = intake.get("industry", "Allgemein")
         industry_cfg = self.criteria.get("industries", {}).get(industry, {})
-        mandatory_skills = industry_cfg.get("cover_letter", {}).get("mandatory_skills", [])
+        if not isinstance(industry_cfg, dict):
+            industry_cfg = {}
+        cl_cfg = industry_cfg.get("cover_letter", {})
+        if not isinstance(cl_cfg, dict):
+            cl_cfg = {}
+        mandatory_skills = cl_cfg.get("mandatory_skills", [])
+        if not isinstance(mandatory_skills, (list, tuple)):
+            mandatory_skills = []
 
         print(f"  {Colors.GREY}Scoring job against profile (industry: {industry})...{Colors.END}")
 
@@ -283,8 +296,8 @@ class JobPipeline:
             job_description=job.description,
             rejections_str=rejections_str,
             career_start_year=self.criteria.get("cover_letter", {}).get("career_start_year", 2010),
-            candidate_german=ko.get("languages", {}).get("min_required_german", "B1"),
-            candidate_english=ko.get("languages", {}).get("min_required_english", "A2"),
+            candidate_german=self.candidate_profile.get("languages", {}).get("deutsch", "Keine"),
+            candidate_english=self.candidate_profile.get("languages", {}).get("englisch", "Keine"),
             clearance_keywords=", ".join(ko.get("clearances", {}).get("forbidden_keywords", [])),
             certifications=", ".join(ko.get("certifications", {}).get("mandatory_if_specified", [])),
             min_salary=ko.get("salary", {}).get("min_annual_eur", 36000),
@@ -308,10 +321,42 @@ class JobPipeline:
     # Stage 4: Generate cover letter
     # -----------------------------------------------------------------------
 
+    def _build_anschreiben_header(self, company_name: str) -> str:
+        """Build DIN 5008 letter header block as plain text."""
+        pi = self.candidate_profile.get("personal_info", {})
+        raw_name = pi.get("name", f"{pi.get('first_name', '')} {pi.get('last_name', '')}").strip()
+        sender_name = raw_name if raw_name else "Bewerber"
+        city = pi.get("city", "Berlin")
+        sender_address = pi.get("address", "")
+        raw_loc = pi.get("location", "")
+        if not sender_address and raw_loc and "," in raw_loc:
+            sender_address = raw_loc.split(",")[0].strip()
+        if not city and raw_loc and "," in raw_loc:
+            parts = [p.strip() for p in raw_loc.split(",")]
+            if len(parts) >= 2:
+                city = parts[-2] if len(parts) > 2 else parts[-1]
+        sender_email = pi.get("email", "")
+        sender_phone = pi.get("phone", "")
+        date_str = datetime.date.today().strftime("%d.%m.%Y")
+
+        lines = [
+            sender_name,
+            sender_address,
+            f"{sender_email} | {sender_phone}" if sender_email or sender_phone else "",
+            "",
+            company_name,
+            "Deutschland",
+            "",
+            f"{city}, {date_str}",
+            "",
+        ]
+        return "\n".join(l for l in lines if l)
+
     def generate_anschreiben(self, job: JobPosting, intake: dict, score_data: dict) -> dict:
         """Generate a cover letter (Anschreiben) using LLM.
 
         Returns dict with: subject, salutation, body, closing, full_text.
+        full_text includes a DIN 5008 header block for use in email drafts.
         """
         self.initialize()
         industry = intake.get("industry", "Allgemein")
@@ -324,7 +369,14 @@ class JobPipeline:
             prompt_key = "cover_letter_prompt"
 
         industry_cfg = self.criteria.get("industries", {}).get(industry, {})
-        mandatory_skills = industry_cfg.get("cover_letter", {}).get("mandatory_skills", [])
+        if not isinstance(industry_cfg, dict):
+            industry_cfg = {}
+        cl_cfg = industry_cfg.get("cover_letter", {})
+        if not isinstance(cl_cfg, dict):
+            cl_cfg = {}
+        mandatory_skills = cl_cfg.get("mandatory_skills", [])
+        if not isinstance(mandatory_skills, (list, tuple)):
+            mandatory_skills = []
 
         prompt = PROMPTS.get(prompt_key).format(
             candidate_profile=compact_profile_for_llm(self.candidate_profile),
@@ -332,10 +384,12 @@ class JobPipeline:
             cv_text=cv_text or "Nicht verfügbar",
             salary_exp=self.config.get("defaults", {}).get("salary_expectation", "nach Vereinbarung"),
             availability=self.config.get("defaults", {}).get("availability", "sofort"),
-            candidate_german=self.config.get("criteria", {}).get("german_level", "B1"),
+            candidate_german=self.candidate_profile.get("languages", {}).get("deutsch", "Keine"),
             career_start_year=self.criteria.get("cover_letter", {}).get("career_start_year", 2010),
             mandatory_skills=", ".join(mandatory_skills),
         )
+
+        company_name = intake.get("company_name", job.company)
 
         try:
             response = llm_request_with_fallback(prompt)
@@ -344,12 +398,14 @@ class JobPipeline:
             raw = response.text.strip()
             data = json.loads(clean_and_repair_json(raw))
             if isinstance(data, dict) and "body" in data:
-                full_text = (
+                header = self._build_anschreiben_header(company_name)
+                letter_body = (
                     f"{data.get('subject', 'Bewerbung')}\n\n"
                     f"{data.get('salutation', 'Sehr geehrte Damen und Herren,')}\n\n"
                     f"{data.get('body', '')}\n\n"
                     f"{data.get('closing', 'Mit freundlichen Grüßen')}"
                 )
+                full_text = f"{header}\n\n{letter_body}"
                 data["full_text"] = full_text
                 return data
             return self._empty_anschreiben(raw)
@@ -406,14 +462,15 @@ class JobPipeline:
         pi = self.candidate_profile.get("personal_info", {})
         raw_name = pi.get("name", f"{pi.get('first_name', '')} {pi.get('last_name', '')}").strip()
         sender_name = raw_name if raw_name else "Bewerber"
+        city = pi.get("city", "Berlin")
+        sender_address = pi.get("address", "")
         raw_loc = pi.get("location", "")
-        if raw_loc and "," in raw_loc:
+        if not sender_address and raw_loc and "," in raw_loc:
+            sender_address = raw_loc.split(",")[0].strip()
+        if not city and raw_loc and "," in raw_loc:
             parts = [p.strip() for p in raw_loc.split(",")]
-            sender_address = parts[0]
-            city = parts[-1]
-        else:
-            sender_address = pi.get("address", "")
-            city = pi.get("city", raw_loc or "Berlin")
+            if len(parts) >= 2:
+                city = parts[-2] if len(parts) > 2 else parts[-1]
         sender_email = pi.get("email", "")
         sender_phone = pi.get("phone", "")
         date_str = datetime.date.today().strftime("%d.%m.%Y")
@@ -422,7 +479,7 @@ class JobPipeline:
             subject = anschreiben_data.get("subject", "Bewerbung")
             salutation = anschreiben_data.get("salutation", "Sehr geehrte Damen und Herren,")
             raw_body = anschreiben_data.get("body", "")
-            body_html = "".join(f"<p>{p.strip()}</p>" for p in raw_body.split("\n") if p.strip())
+            body_html = "".join(f"<p>{p.strip()}</p>" for p in raw_body.splitlines() if p.strip())
             if not body_html:
                 body_html = "<p>" + anschreiben_data.get("full_text", "").replace("\n", "</p><p>") + "</p>"
         else:
@@ -430,7 +487,8 @@ class JobPipeline:
             salutation = "Sehr geehrte Damen und Herren,"
             body_html = f"<p>{str(anschreiben_data).replace(chr(10), '</p><p>')}</p>"
 
-        html = f"""<!DOCTYPE html>
+        esc = html.escape
+        html_out = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
   @page {{ size: A4; margin: 25mm 20mm 20mm 20mm; }}
   body {{ font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #333; }}
@@ -443,13 +501,13 @@ class JobPipeline:
   .content p {{ margin-bottom: 4mm; }}
   .closing {{ margin-top: 8mm; }}
 </style></head><body>
-  <div class="sender"><strong>{sender_name}</strong><br>{sender_address}<br>{sender_email} | {sender_phone}</div>
-  <div class="recipient"><strong>{company_name} GmbH</strong><br>Ansprechpartner für Bewerbungen<br>Deutschland</div>
-  <div class="date">{city}, {date_str}</div>
-  <div class="subject">{subject}</div>
-  <div class="salutation">{salutation}</div>
+  <div class="sender"><strong>{esc(sender_name)}</strong><br>{esc(sender_address)}<br>{esc(sender_email)} | {esc(sender_phone)}</div>
+  <div class="recipient"><strong>{esc(company_name)}</strong><br>Deutschland</div>
+  <div class="date">{esc(city)}, {date_str}</div>
+  <div class="subject">{esc(subject)}</div>
+  <div class="salutation">{esc(salutation)}</div>
   <div class="content">{body_html}</div>
-  <div class="closing">Mit freundlichen Grüßen<br><br><br><strong>{sender_name}</strong></div>
+  <div class="closing">Mit freundlichen Grüßen<br><br><br><strong>{esc(sender_name)}</strong></div>
 </body></html>"""
 
         try:
@@ -457,7 +515,7 @@ class JobPipeline:
             with sync_playwright() as pw:
                 browser = pw.chromium.launch(headless=True)
                 page = browser.new_page()
-                page.set_content(html)
+                page.set_content(html_out)
                 page.pdf(path=pdf_path, format="A4")
                 browser.close()
             print(f"{Colors.GREEN}✅ PDF erstellt: {pdf_path}{Colors.END}")
@@ -476,12 +534,16 @@ class JobPipeline:
         anschreiben_data: dict,
         pdf_path: Optional[str] = None,
         terminal_output: Optional[str] = None,
+        relevant_docs: Optional[list[str]] = None,
     ) -> Optional[str]:
         """Generate .eml draft for candidate ONLY (no employer email).
 
         GDPR compliance + user request: all drafts go to the candidate's
         email address for manual review. No auto-send to employers.
         Returns path to .eml file.
+
+        Args:
+            relevant_docs: Optional list of document classifications to include as attachments.
         """
         self.initialize()
 
@@ -498,11 +560,16 @@ class JobPipeline:
         if contact and contact.get("recruiter_name"):
             full_text = personalize_anschreiben(full_text, contact["recruiter_name"])
 
-        # Collect attachments: PDF, CV, certificates
+        # Prepend model info for quality tracking
+        model_name = _llm.LOCAL_MODEL
+        model_header = f"[Modell: {model_name}]\n\n"
+        full_text = model_header + full_text
+
+        # Collect attachments: PDF, CV, filtered certificates
         attachments = []
         if pdf_path and os.path.exists(pdf_path):
             attachments.append(pdf_path)
-        attachments.extend(self._collect_candidate_docs())
+        attachments.extend(self._collect_candidate_docs(relevant_docs=relevant_docs))
 
         # Build a candidate contact with metadata for the draft
         candidate_contact = {
@@ -526,8 +593,14 @@ class JobPipeline:
 
         return draft_path
 
-    def _collect_candidate_docs(self) -> list[str]:
-        """Collect CV and certificate paths for draft attachments."""
+    def _collect_candidate_docs(self, relevant_docs: Optional[list[str]] = None) -> list[str]:
+        """Collect CV and certificate paths for draft attachments.
+
+        Args:
+            relevant_docs: Optional list of document classifications to include.
+                When None or empty, includes ALL certs (backward compat).
+                Always includes Lebenslauf.
+        """
         paths = []
         try:
             cursor = self.conn.cursor()
@@ -542,9 +615,19 @@ class JobPipeline:
                 if os.path.exists(f):
                     paths.append(f)
 
-            cursor.execute(
-                "SELECT file_path FROM candidate_files WHERE classification IN ('Zertifikat', 'Diplom', 'Zeugnis', 'Arbeitszeugnis')"
-            )
+            # Filter certs by relevant_docs if specified
+            if relevant_docs:
+                filter_classes = [c for c in relevant_docs if c != 'Lebenslauf']
+                if filter_classes:
+                    placeholders = ",".join("?" for _ in filter_classes)
+                    cursor.execute(
+                        f"SELECT file_path FROM candidate_files WHERE classification IN ({placeholders})",
+                        filter_classes,
+                    )
+            else:
+                cursor.execute(
+                    "SELECT file_path FROM candidate_files WHERE classification IN ('Zertifikat', 'Diplom', 'Zeugnis', 'Arbeitszeugnis')"
+                )
             for (doc_path,) in cursor.fetchall():
                 f = doc_path
                 if not os.path.isabs(f):
@@ -566,6 +649,7 @@ class JobPipeline:
         job: JobPosting,
         auto_approve: bool = False,
         force_generate: bool = False,
+        send_email: Optional[bool] = None,
         tee: Optional["TeeStdout"] = None,
     ) -> ProcessResult:
         """Run the full pipeline on a single job posting.
@@ -647,6 +731,9 @@ class JobPipeline:
         if force_generate:
             min_score = 0.0
 
+        # Extract relevant_documents from score for attachment filtering
+        result.relevant_docs = score_data.get("relevant_documents", []) if not force_generate else []
+
         if result.score >= min_score and not result.ko_triggered:
             print(f"  {Colors.GREY}Score:{Colors.END} {Colors.GREEN}{Colors.BOLD}{result.score}/10 ✅{Colors.END}")
         else:
@@ -672,8 +759,54 @@ class JobPipeline:
         # --- Stage 5: Email draft ---
         print(f"  {Colors.GREY}Stage 5: Creating email draft...{Colors.END}")
         terminal_out = tee.getvalue() if tee else None
-        draft_path = self.create_draft(job, anschreiben_data, pdf_path, terminal_out)
+        draft_path = self.create_draft(
+            job, anschreiben_data, pdf_path, terminal_out,
+            relevant_docs=result.relevant_docs,
+        )
         result.draft_path = draft_path
+
+        # --- Stage 6: Send SMTP to candidate (per-job, if --send-email) ---
+        send_now = send_email if send_email is not None else self.send_email
+        if send_now and draft_path:
+            print(f"  {Colors.GREY}Stage 6: Sending SMTP to candidate...{Colors.END}")
+            cert_paths = self._collect_candidate_docs(relevant_docs=result.relevant_docs)
+            # Remove Lebenslauf from cert_paths (handled separately in send_candidate_email)
+            lebenslauf_path = None
+            filtered_certs = []
+            cursor_lf = self.conn.cursor()
+            cursor_lf.execute(
+                "SELECT file_path FROM candidate_files WHERE classification = 'Lebenslauf' ORDER BY mtime DESC LIMIT 1"
+            )
+            lf_row = cursor_lf.fetchone()
+            if lf_row:
+                lf = lf_row[0]
+                if not os.path.isabs(lf):
+                    lf = os.path.normpath(os.path.join(self.workspace_dir, lf))
+                if os.path.exists(lf):
+                    lebenslauf_path = lf
+            for cp in cert_paths:
+                if cp != lebenslauf_path:
+                    filtered_certs.append(cp)
+
+            # Also save anschreiben .txt alongside .eml
+            anschreiben_txt_path = None
+            if draft_path:
+                txt_path = draft_path.replace(".eml", ".txt")
+                if os.path.exists(txt_path):
+                    anschreiben_txt_path = txt_path
+
+            result.email_sent = send_candidate_email(
+                smtp_config=self.config.get("smtp", {}),
+                candidate_profile=self.candidate_profile,
+                company=company_name,
+                job_title=job_title,
+                anschreiben_txt_path=anschreiben_txt_path,
+                anschreiben_pdf_path=pdf_path,
+                lebenslauf_path=lebenslauf_path,
+                cert_paths=filtered_certs,
+                terminal_output=terminal_out or "",
+                url=job.url,
+            )
 
         # --- Approval ---
         result.approved = True
@@ -681,10 +814,13 @@ class JobPipeline:
         log_application(
             self.conn, company_name, job_title, job.url, result.score, result.status,
             terminal_output=terminal_out, pdf_path=pdf_path,
+            relevant_docs=result.relevant_docs,
         )
 
         if draft_path:
             print(f"{Colors.GREEN}✅ {result.status}: {draft_path}{Colors.END}")
+        if result.email_sent:
+            print(f"{Colors.GREEN}✅ SMTP sent to candidate.{Colors.END}")
         print(f"{Colors.GREEN}  Job processing completed.{Colors.END}")
         print(f"{Colors.GREY}{'='*80}{Colors.END}\n")
 
@@ -699,13 +835,15 @@ class JobPipeline:
         jobs: list[JobPosting],
         auto_approve: bool = False,
         force_generate: bool = False,
+        send_email: Optional[bool] = None,
     ) -> list[ProcessResult]:
         """Process a list of job postings through the full pipeline."""
         results: list[ProcessResult] = []
         for job in jobs:
             tee = TeeStdout()
             try:
-                result = self.process_job(job, auto_approve=auto_approve, force_generate=force_generate, tee=tee)
+                result = self.process_job(job, auto_approve=auto_approve, force_generate=force_generate,
+                                         send_email=send_email, tee=tee)
                 results.append(result)
             except Exception as e:
                 print(f"{Colors.RED}Error processing {job.title} @ {job.company}: {e}{Colors.END}")
@@ -896,7 +1034,21 @@ class JobPipeline:
             '"education": [...], "certifications": [...]}'
         )
 
-        response = llm_request_with_fallback(prompt)
+        # Use configured local model for CV parsing, fall back to main model if unavailable
+        from job_agent.ollama_llm import call_ollama, ollama_available
+        import job_agent.llm as _llm_mod
+        CV_PARSE_MODEL = _llm_mod.LOCAL_MODEL
+        response = None
+        if not _llm_mod.CLOUD_ONLY and ollama_available(CV_PARSE_MODEL):
+            print(f"{Colors.CYAN}[CV Parse] Using model: {CV_PARSE_MODEL}{Colors.END}")
+            local_resp = call_ollama(prompt, model=CV_PARSE_MODEL)
+            if local_resp:
+                class LocalResponse:
+                    def __init__(self, text):
+                        self.text = text
+                response = LocalResponse(local_resp)
+        if response is None:
+            response = llm_request_with_fallback(prompt)
         if response is None:
             print(f"{Colors.RED}Warning: LLM returned None for CV parsing.{Colors.END}")
             return {"error": "LLM returned None"}
@@ -1017,6 +1169,93 @@ class JobPipeline:
     # Batch digest draft
     # -----------------------------------------------------------------------
 
+    def send_all_pending_candidate_emails(self) -> int:
+        """Send per-job SMTP emails for all pending applications.
+
+        Standalone mode: iterates pending jobs in DB and sends each via
+        send_candidate_email(). Returns number of successful sends.
+        """
+        self.initialize()
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT id, company_name, job_title, url, score, applied_date, terminal_output, pdf_path, relevant_docs "
+                "FROM applied_jobs "
+                "WHERE (status LIKE 'Applied%' OR status LIKE 'Draft%') AND email_sent = 0"
+            )
+            rows = cursor.fetchall()
+        except sqlite3.OperationalError as e:
+            print(f"{Colors.RED}DB error: {e}{Colors.END}")
+            return 0
+
+        if not rows:
+            print(f"{Colors.GREEN}No pending applications to email.{Colors.END}")
+            return 0
+
+        success_count = 0
+        for row in rows:
+            db_id, company_name, job_title, url, score, applied_date, terminal_output, pdf_path, relevant_docs_json = row
+            relevant_docs = []
+            if relevant_docs_json:
+                try:
+                    relevant_docs = json.loads(relevant_docs_json)
+                except Exception:
+                    pass
+
+            # Collect certs filtered by relevant_docs
+            cert_paths = self._collect_candidate_docs(relevant_docs=relevant_docs)
+            lebenslauf_path = None
+            filtered_certs = []
+            clf = self.conn.cursor()
+            clf.execute(
+                "SELECT file_path FROM candidate_files WHERE classification = 'Lebenslauf' ORDER BY mtime DESC LIMIT 1"
+            )
+            lf_row = clf.fetchone()
+            if lf_row:
+                lf = lf_row[0]
+                if not os.path.isabs(lf):
+                    lf = os.path.normpath(os.path.join(self.workspace_dir, lf))
+                if os.path.exists(lf):
+                    lebenslauf_path = lf
+            for cp in cert_paths:
+                if cp != lebenslauf_path:
+                    filtered_certs.append(cp)
+
+            # Find anschreiben .txt next to the pdf
+            anschreiben_txt_path = None
+            if pdf_path and os.path.exists(pdf_path):
+                txt_path = pdf_path.replace(".pdf", ".txt")
+                if os.path.exists(txt_path):
+                    anschreiben_txt_path = txt_path
+
+            ok = send_candidate_email(
+                smtp_config=self.config.get("smtp", {}),
+                candidate_profile=self.candidate_profile,
+                company=company_name,
+                job_title=job_title,
+                anschreiben_txt_path=anschreiben_txt_path,
+                anschreiben_pdf_path=pdf_path,
+                lebenslauf_path=lebenslauf_path,
+                cert_paths=filtered_certs,
+                terminal_output=terminal_output or "",
+            )
+            if ok:
+                try:
+                    cursor.execute("UPDATE applied_jobs SET email_sent = 1 WHERE id = ?", (db_id,))
+                    self.conn.commit()
+                except Exception:
+                    pass
+                success_count += 1
+            else:
+                try:
+                    cursor.execute("UPDATE applied_jobs SET email_sent = -1 WHERE id = ?", (db_id,))
+                    self.conn.commit()
+                except Exception:
+                    pass
+
+        print(f"{Colors.GREEN}Sent {success_count}/{len(rows)} candidate emails.{Colors.END}")
+        return success_count
+
     def generate_pending_digest(self) -> Optional[str]:
         """Generate a digest .eml with all pending applications."""
         from job_agent.email_draft_generator import generate_candidate_digest_draft
@@ -1119,6 +1358,7 @@ def run_pipeline_mode(
     force_generate: bool = False,
     auto_approve: bool = False,
     ignore_ollama: bool = False,
+    send_email: bool = False,
 ) -> None:
     """Run the GDPR-compliant pipeline from the CLI.
 
@@ -1131,7 +1371,10 @@ def run_pipeline_mode(
     print(f"{Colors.MAGENTA}{Colors.BOLD}{'='*80}{Colors.END}")
     print(f"  {Colors.GREY}Sources:{Colors.END} Bundesagentur + Arbeitnow + Jooble + Adzuna")
     print(f"  {Colors.GREY}LLM:{Colors.END} Local (Ollama) → OpenRouter → Gemini fallback")
-    print(f"  {Colors.GREY}Output:{Colors.END} .eml drafts in drafts/ (no automatic SMTP)")
+    if send_email:
+        print(f"  {Colors.GREY}Email:{Colors.END} SMTP to candidate per job")
+    else:
+        print(f"  {Colors.GREY}Output:{Colors.END} .eml drafts in drafts/ (no automatic SMTP)")
     print(f"{Colors.MAGENTA}{Colors.BOLD}{'='*80}{Colors.END}\n")
 
     # Initialize pipeline
@@ -1139,6 +1382,7 @@ def run_pipeline_mode(
         workspace_dir=workspace_dir,
         criteria_path=criteria_path,
         profile_path=profile_path,
+        send_email=send_email,
     )
     pipeline.initialize()
 
@@ -1227,4 +1471,7 @@ def run_pipeline_mode(
     print(f"\n  {Colors.GREY}Drafts saved in:{Colors.END} drafts/")
     print(f"  {Colors.GREY}PDFs saved in:{Colors.END} src/output/")
     print(f"{Colors.MAGENTA}{Colors.BOLD}{'='*80}{Colors.END}")
-    print(f"{Colors.YELLOW}⚠️  Please open .eml files manually to send (GDPR compliance).{Colors.END}\n")
+    if send_email:
+        print(f"{Colors.GREEN}✅ Emails sent to candidate via SMTP.{Colors.END}\n")
+    else:
+        print(f"{Colors.YELLOW}⚠️  Please open .eml files manually to send (GDPR compliance).{Colors.END}\n")
